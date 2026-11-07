@@ -161,7 +161,7 @@ fun NutriTrackApp(
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "NUTRITRACK",
+                                        text = "TRACKABLE",
                                         style = MaterialTheme.typography.titleMedium.copy(
                                             fontWeight = FontWeight.Black,
                                             color = TextPrimary,
@@ -310,7 +310,7 @@ fun NutriTrackApp(
 
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "NutriTrack v1.2.0 • Offline Ready",
+                        text = "Trackable v1.2.0 • Offline Ready",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = TextMuted.copy(alpha = 0.5f),
                             fontSize = 10.sp
