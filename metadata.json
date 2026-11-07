@@ -1,0 +1,6 @@
+{
+  "name": "NutriTrack AI",
+  "description": "Personal AI nutrition and fitness tracker with food inventory, local Room database, macros, water tracking, and natural language logging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
