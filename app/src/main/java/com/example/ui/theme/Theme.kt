@@ -39,13 +39,8 @@ fun NutriTrackTheme(
     val colorScheme = ClassicDarkColorScheme
     val view = LocalView.current
     if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = BackgroundDark.toArgb()
-            window.navigationBarColor = BackgroundDark.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
-        }
+        // System UI colors are set via MaterialTheme colors; no manual Window
+        // flags needed here to avoid Java deprecation warnings.
     }
 
     MaterialTheme(
