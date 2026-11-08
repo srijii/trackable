@@ -37,6 +37,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,6 +64,8 @@ import com.example.ui.screens.history.HistoryScreen
 import com.example.ui.screens.history.HistoryViewModel
 import com.example.ui.screens.inventory.InventoryScreen
 import com.example.ui.screens.inventory.InventoryViewModel
+import com.example.ui.screens.onboarding.OnboardingScreen
+import com.example.ui.screens.onboarding.OnboardingViewModel
 import com.example.ui.screens.settings.SettingsScreen
 import com.example.ui.screens.settings.SettingsViewModel
 import com.example.ui.screens.weight.WeightTrackerScreen
@@ -77,6 +80,7 @@ import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.launch
 
 @Composable
@@ -88,8 +92,16 @@ fun NutriTrackApp(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Dashboard.route
 
+    val onboardingViewModel = remember { OnboardingViewModel(repository) }
+    val appSettingsState by repository.settingsFlow.collectAsState(initial = null)
+
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
+
+    // Initialize database settings before determining start destination
+    LaunchedEffect(Unit) {
+        repository.initialize()
+    }
 
     // Retain ViewModels across recompositions
     val dashboardViewModel = remember { DashboardViewModel(repository, aiCoordinator) }
@@ -98,6 +110,15 @@ fun NutriTrackApp(
     val analyticsViewModel = remember { AnalyticsViewModel(repository) }
     val historyViewModel = remember { HistoryViewModel(repository) }
     val settingsViewModel = remember { SettingsViewModel(repository) }
+
+    // Determine start destination: show dashboard if onboarded or still loading,
+    // show onboarding only if we know onboarding is not completed
+    val hasCompletedOnboarding = appSettingsState?.hasCompletedOnboarding == true
+    val startDestination = if (appSettingsState == null || hasCompletedOnboarding) {
+        Screen.Dashboard.route
+    } else {
+        Screen.Onboarding.route
+    }
 
     // Intercept back button if drawer is open
     BackHandler(enabled = drawerState.isOpen) {
@@ -330,8 +351,22 @@ fun NutriTrackApp(
             ) {
                 NavHost(
                     navController = navController,
-                    startDestination = Screen.Dashboard.route
+                    startDestination = startDestination
                 ) {
+                    composable(Screen.Onboarding.route) {
+                        OnboardingScreen(
+                            viewModel = onboardingViewModel,
+                            onFinish = {
+                                navController.navigate(Screen.Dashboard.route) {
+                                    popUpTo(Screen.Onboarding.route) {
+                                        inclusive = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        )
+                    }
                     composable(Screen.Dashboard.route) {
                         DashboardScreen(
                             viewModel = dashboardViewModel,
@@ -409,6 +444,15 @@ fun NutriTrackApp(
                             )
                             SettingsScreen(
                                 viewModel = settingsViewModel,
+                                onSaveComplete = {
+                                    navController.navigate(Screen.Dashboard.route) {
+                                        popUpTo(Screen.Dashboard.route) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
                                 modifier = Modifier.weight(1f)
                             )
                         }

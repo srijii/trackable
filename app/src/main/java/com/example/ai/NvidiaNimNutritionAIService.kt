@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 
 class NvidiaNimNutritionAIService(
     private val apiKeyProvider: () -> String,
-    private val modelProvider: () -> String = { "meta/llama-3.3-70b-instruct" },
+    private val modelProvider: () -> String = { "minimaxai/minimax-m3.1-flash" },
     private val baseUrlProvider: () -> String = { "https://integrate.api.nvidia.com/v1" },
     private val localFallbackService: LocalRuleBasedNutritionAIService = LocalRuleBasedNutritionAIService()
 ) : NutritionAIService {
@@ -22,8 +22,8 @@ class NvidiaNimNutritionAIService(
     override val providerName: String = "NVIDIA NIM"
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
     override suspend fun parseFoodInput(
@@ -61,6 +61,16 @@ class NvidiaNimNutritionAIService(
                 You are a nutrition logging parser for an Android nutrition app.
                 The user has the following foods in their personal food inventory (JSON):
                 $inventorySummary
+
+                User sentence: "$userInput"
+
+                IMPORTANT: The user's input may contain typos, missing spaces, wrong punctuation,
+                or broken formatting (e.g. "50g paner", "milkk 50ml", "paneer 50 g", "milk, paneer 50,60").
+                You must be smart and tolerant:
+                - Fix obvious spelling mistakes (e.g. "paner" -> "paneer", "milkk" -> "milk")
+                - Join split quantities and units (e.g. "50 g" -> "50g", "200 m l" -> "200ml")
+                - Parse comma-separated or punctuation-separated items correctly
+                - If unsure, match to the closest inventory item by name similarity
 
                 Task:
                 1. Identify all foods/drinks and their quantities/units from the user's sentence.
@@ -100,7 +110,7 @@ class NvidiaNimNutritionAIService(
                 })
             }
 
-            val modelName = modelProvider().ifBlank { "meta/llama-3.3-70b-instruct" }
+            val modelName = modelProvider().ifBlank { "minimaxai/minimax-m3.1-flash" }
             val requestJson = JSONObject().apply {
                 put("model", modelName)
                 put("messages", messagesArray)

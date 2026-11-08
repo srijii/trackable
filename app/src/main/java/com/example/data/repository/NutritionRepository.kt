@@ -6,11 +6,31 @@ import com.example.data.database.FoodEntity
 import com.example.data.database.FoodLogEntity
 import com.example.data.database.NutritionGoalEntity
 import com.example.data.database.WaterLogEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.time.LocalDate
+import java.util.concurrent.TimeUnit
+
+/**
+ * Result of testing an API key against a provider's endpoint.
+ */
+sealed class ApiKeyTestResult {
+    object Success : ApiKeyTestResult()
+    data class Failure(val error: String) : ApiKeyTestResult()
+}
 
 data class DailyNutritionSummary(
     val dateString: String,
@@ -119,6 +139,97 @@ class NutritionRepository(private val database: AppDatabase) {
 
     suspend fun saveSettings(settings: com.example.data.database.AppSettingsEntity) {
         appSettingsDao.insertOrUpdate(settings)
+    }
+
+    // -----------------------------------------------------------------------
+    // API Key Validation — test a key against the provider before saving it
+    // -----------------------------------------------------------------------
+    private val testClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build()
+
+    suspend fun testApiKey(
+        provider: String,
+        apiKey: String,
+        model: String,
+        baseUrl: String = ""
+    ): ApiKeyTestResult = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+            ApiKeyTestResult.Failure("API key is empty or is a placeholder")
+        } else {
+            try {
+                when (provider) {
+                    "GEMINI" -> testGeminiKey(apiKey, model)
+                    "NVIDIA_NIM", "OPENAI" -> testOpenAICompatibleKey(apiKey, baseUrl, model)
+                    "LOCAL" -> ApiKeyTestResult.Success
+                    else -> ApiKeyTestResult.Failure("Unknown provider: $provider")
+                }
+            } catch (e: UnknownHostException) {
+                ApiKeyTestResult.Failure("No internet connection — cannot reach the API server.")
+            } catch (e: SocketTimeoutException) {
+                ApiKeyTestResult.Failure("Request timed out — check your internet connection.")
+            } catch (e: IOException) {
+                ApiKeyTestResult.Failure("Network error: ${e.message ?: "Unable to connect to the API server."}")
+            } catch (e: Exception) {
+                ApiKeyTestResult.Failure("${e.message ?: "Unexpected error while testing the API key."}")
+            }
+        }
+    }
+
+    private suspend fun testGeminiKey(apiKey: String, model: String): ApiKeyTestResult {
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/${model.ifBlank { "gemini-3.6-flash" }}:generateContent?key=$apiKey"
+        val body = JSONObject().apply {
+            put("contents", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply { put("text", "test") })
+                    })
+                })
+            })
+        }
+        val request = Request.Builder()
+            .url(url)
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        val response = testClient.newCall(request).execute()
+        return if (response.isSuccessful) {
+            ApiKeyTestResult.Success
+        } else {
+            val bodyText = response.body?.string() ?: ""
+            ApiKeyTestResult.Failure("Gemini API error (HTTP ${response.code}): ${response.message}. $bodyText")
+        }
+    }
+
+    private suspend fun testOpenAICompatibleKey(apiKey: String, baseUrl: String, model: String): ApiKeyTestResult {
+        var url = baseUrl.trim()
+        if (url.endsWith("/")) {
+            url = url.substring(0, url.length - 1)
+        }
+        val endpoint = if (url.endsWith("/chat/completions")) url else "$url/chat/completions"
+        val body = JSONObject().apply {
+            put("model", model.ifBlank { "gpt-4o-mini" })
+            put("messages", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("role", "user")
+                    put("content", "test")
+                })
+            })
+            put("max_tokens", 10)
+        }
+        val request = Request.Builder()
+            .url(endpoint)
+            .header("Authorization", "Bearer $apiKey")
+            .header("Accept", "application/json")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        val response = testClient.newCall(request).execute()
+        return if (response.isSuccessful) {
+            ApiKeyTestResult.Success
+        } else {
+            val bodyText = response.body?.string() ?: ""
+            ApiKeyTestResult.Failure("API error (HTTP ${response.code}): ${response.message}. $bodyText")
+        }
     }
 
     suspend fun initialize() {

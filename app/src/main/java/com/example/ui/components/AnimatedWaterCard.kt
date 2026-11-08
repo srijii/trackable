@@ -62,9 +62,11 @@ import kotlin.math.sin
 fun AnimatedWaterCard(
     waterConsumedMl: Int,
     waterGoalMl: Int = 3000,
-    onAddCup: () -> Unit = {},
+    cupSize1Ml: Int = 250,
+    cupSize2Ml: Int = 500,
+    onAddCup1: () -> Unit = {},
     onRemoveCup: () -> Unit = {},
-    onAddAmount: (Int) -> Unit = {},
+    onAddCup2: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val progress = if (waterGoalMl > 0) {
@@ -99,9 +101,7 @@ fun AnimatedWaterCard(
         label = "wave_phase_2"
     )
 
-    val cupsConsumed = waterConsumedMl / 250
-    val cupsTotal = (waterGoalMl / 250).coerceAtLeast(1)
-    val cupsRemaining = (cupsTotal - cupsConsumed).coerceAtLeast(0)
+    val waterRemainingMl = (waterGoalMl - waterConsumedMl).coerceAtLeast(0)
     val litersConsumed = String.format("%.1f", waterConsumedMl / 1000.0)
     val litersGoal = String.format("%.1f", waterGoalMl / 1000.0)
 
@@ -253,7 +253,7 @@ fun AnimatedWaterCard(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "$cupsConsumed Cups",
+                            text = "$waterConsumedMl ml",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Black,
                                 color = TextPrimary
@@ -261,7 +261,7 @@ fun AnimatedWaterCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "($waterConsumedMl ml)",
+                            text = "consumed",
                             style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
                         )
                     }
@@ -308,28 +308,28 @@ fun AnimatedWaterCard(
 
                 // Cups Remaining Label
                 Text(
-                    text = if (cupsRemaining > 0) "$cupsRemaining Cups Remaining" else "Daily Target Reached! 🎉",
+                    text = if (waterRemainingMl > 0) "$waterRemainingMl ml Remaining" else "Daily Target Reached! 🎉",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = if (cupsRemaining > 0) TextSecondary else Color(0xFF10B981),
+                        color = if (waterRemainingMl > 0) TextSecondary else Color(0xFF10B981),
                         fontWeight = FontWeight.Medium
                     )
                 )
 
-                // Quick Increment Action Buttons
+                // Quick Increment Action Buttons (the 2 configured cup sizes)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // +250 ml (1 Cup)
+                    // Cup 1
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(Color(0xFF1E232B))
                             .border(1.dp, SurfaceBorder, RoundedCornerShape(10.dp))
-                            .clickable { onAddCup() }
+                            .clickable { onAddCup1() }
                             .padding(horizontal = 10.dp, vertical = 8.dp)
-                            .testTag("add_cup_button"),
+                            .testTag("add_cup_1_button"),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "+250 ml",
+                            text = "+$cupSize1Ml ml",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = Color(0xFF38BDF8),
                                 fontWeight = FontWeight.Bold
@@ -337,19 +337,19 @@ fun AnimatedWaterCard(
                         )
                     }
 
-                    // +500 ml Bottle
+                    // Cup 2
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(Color(0xFF1E232B))
                             .border(1.dp, SurfaceBorder, RoundedCornerShape(10.dp))
-                            .clickable { onAddAmount(500) }
+                            .clickable { onAddCup2() }
                             .padding(horizontal = 10.dp, vertical = 8.dp)
-                            .testTag("add_bottle_button"),
+                            .testTag("add_cup_2_button"),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "+500 ml",
+                            text = "+$cupSize2Ml ml",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = Color(0xFF38BDF8),
                                 fontWeight = FontWeight.Bold

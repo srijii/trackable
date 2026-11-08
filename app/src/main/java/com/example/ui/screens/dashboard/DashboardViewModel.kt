@@ -8,6 +8,7 @@ import com.example.ai.ParsedItemCandidate
 import com.example.data.database.AppSettingsEntity
 import com.example.data.database.FoodEntity
 import com.example.data.database.FoodLogEntity
+import com.example.data.database.NutritionGoalEntity
 import com.example.data.repository.DailyNutritionSummary
 import com.example.data.repository.NutritionRepository
 import com.example.domain.NutritionCalculationEngine
@@ -70,6 +71,14 @@ class DashboardViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = AppSettingsEntity()
+        )
+
+    val goals: StateFlow<NutritionGoalEntity> = repository.goalsFlow
+        .map { it ?: NutritionGoalEntity() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = NutritionGoalEntity()
         )
 
     private val _aiIsLoading = MutableStateFlow(false)
@@ -182,9 +191,19 @@ class DashboardViewModel(
         }
     }
 
-    fun addWaterCup() {
+    fun addWaterCupSize1() {
         viewModelScope.launch {
-            repository.addWater(250, _selectedDate.value.toString())
+            val size = appSettings.value?.cupSize1Ml ?: 250
+            repository.addWater(size, _selectedDate.value.toString())
+            _userFeedbackMessage.value = "Added $size ml water"
+        }
+    }
+
+    fun addWaterCupSize2() {
+        viewModelScope.launch {
+            val size = appSettings.value?.cupSize2Ml ?: 500
+            repository.addWater(size, _selectedDate.value.toString())
+            _userFeedbackMessage.value = "Added $size ml water"
         }
     }
 

@@ -384,9 +384,22 @@ fun ScreenshotWeekCalendarStrip(
 // -------------------------------------------------------------------------
 @Composable
 fun ScreenshotCalorieGoalWarningBanner(
+    goals: com.example.data.database.NutritionGoalEntity,
     onTap: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val missingFields = mutableListOf<String>()
+    if (goals.name.isBlank()) missingFields.add("Name")
+    if (goals.sex.isBlank()) missingFields.add("Sex")
+    if (goals.age == null) missingFields.add("Age")
+    if (goals.currentWeightKg == null) missingFields.add("Weight")
+    if (goals.heightCm == null) missingFields.add("Height")
+    if (goals.activityLevel.isBlank()) missingFields.add("Activity Level")
+    if (goals.caloriesGoal == 2200.0 && goals.proteinGoal == 140.0 &&
+        goals.carbsGoal == 220.0 && goals.fatGoal == 65.0) {
+        missingFields.add("Daily Nutritional Targets")
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -414,7 +427,7 @@ fun ScreenshotCalorieGoalWarningBanner(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Set Your Calorie Goal",
+                    text = if (missingFields.isNotEmpty()) "Complete Your Profile" else "Set Your Calorie Goal",
                     style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
@@ -423,7 +436,11 @@ fun ScreenshotCalorieGoalWarningBanner(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "You are using the default calorie target\nTap to update your goal",
+                    text = if (missingFields.isNotEmpty()) {
+                        "Please complete: ${missingFields.joinToString(", ")}"
+                    } else {
+                        "You are using the default calorie target\nTap to update your goal"
+                    },
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = Color(0xFFD1D5DB),
                         fontSize = 12.sp,

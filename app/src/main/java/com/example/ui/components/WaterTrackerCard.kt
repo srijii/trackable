@@ -151,14 +151,14 @@ fun WaterTrackerCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Quick add buttons: 100 ml, 250 ml, 500 ml, Custom
+            // Quick add buttons: 100 ml, 200 ml, 300 ml, Custom
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 QuickAddButton(label = "+100 ml", onClick = { onAddWater(100) }, modifier = Modifier.weight(1f))
-                QuickAddButton(label = "+250 ml", onClick = { onAddWater(250) }, modifier = Modifier.weight(1f))
-                QuickAddButton(label = "+500 ml", onClick = { onAddWater(500) }, modifier = Modifier.weight(1f))
+                QuickAddButton(label = "+200 ml", onClick = { onAddWater(200) }, modifier = Modifier.weight(1f))
+                QuickAddButton(label = "+300 ml", onClick = { onAddWater(300) }, modifier = Modifier.weight(1f))
                 OutlinedButton(
                     onClick = { showCustomDialog = true },
                     modifier = Modifier.weight(1f).height(38.dp).testTag("custom_water_button"),

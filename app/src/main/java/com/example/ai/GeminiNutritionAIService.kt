@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 
 class GeminiNutritionAIService(
     private val apiKeyProvider: () -> String = { "" },
-    private val modelProvider: () -> String = { "gemini-2.5-flash" },
+    private val modelProvider: () -> String = { "gemini-3.6-flash" },
     private val localFallbackService: LocalRuleBasedNutritionAIService = LocalRuleBasedNutritionAIService()
 ) : NutritionAIService {
 
@@ -72,6 +72,14 @@ class GeminiNutritionAIService(
 
                 User sentence: "$userInput"
 
+                IMPORTANT: The user's input may contain typos, missing spaces, wrong punctuation,
+                or broken formatting (e.g. "50g paner", "milkk 50ml", "paneer 50 g", "milk, paneer 50,60").
+                You must be smart and tolerant:
+                - Fix obvious spelling mistakes (e.g. "paner" -> "paneer", "milkk" -> "milk")
+                - Join split quantities and units (e.g. "50 g" -> "50g", "200 m l" -> "200ml")
+                - Parse comma-separated or punctuation-separated items correctly
+                - If unsure, match to the closest inventory item by name similarity
+
                 TASK:
                 1. Identify all foods and beverages mentioned, their quantities and units.
                 2. If water is consumed, extract total ml in "waterMl".
@@ -116,7 +124,7 @@ class GeminiNutritionAIService(
                 })
             }
 
-            val model = modelProvider().ifBlank { "gemini-2.5-flash" }
+            val model = modelProvider().ifBlank { "gemini-3.6-flash" }
             val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
             val request = Request.Builder()
                 .url(url)

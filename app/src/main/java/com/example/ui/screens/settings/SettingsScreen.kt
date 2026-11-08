@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Security
@@ -81,9 +82,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
 import com.example.data.database.AppSettingsEntity
 import com.example.data.database.NutritionGoalEntity
-import java.time.LocalDate
-import java.time.YearMonth
-import java.time.format.DateTimeFormatter
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.ClassicRed
 import com.example.ui.theme.FlameOrange
@@ -94,6 +92,10 @@ import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import com.example.ui.theme.WaterCyan
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 
 data class AiModelItem(
     val id: String,
@@ -108,81 +110,31 @@ data class AiModelItem(
 
 val AVAILABLE_AI_MODELS = listOf(
     AiModelItem(
-        id = "gemini_2_5_flash",
+        id = "gemini_3_6_flash",
         provider = "GEMINI",
-        modelName = "gemini-2.5-flash",
-        title = "Google Gemini — Flash 2.5",
-        subtitle = "Fast, lightweight & highly accurate food multiplier calculations",
+        modelName = "gemini-3.6-flash",
+        title = "Google Gemini — Flash 3.6",
+        subtitle = "Confirmed working model",
         requiresApiKey = true,
         badgeLabel = "Google",
         badgeColor = Color(0xFF4285F4)
     ),
     AiModelItem(
-        id = "gemini_1_5_pro",
-        provider = "GEMINI",
-        modelName = "gemini-1.5-pro",
-        title = "Google Gemini — Pro 1.5",
-        subtitle = "Advanced reasoning for complex, multi-item natural language meals",
-        requiresApiKey = true,
-        badgeLabel = "Google",
-        badgeColor = Color(0xFF4285F4)
-    ),
-    AiModelItem(
-        id = "nvidia_llama_3_3_70b",
+        id = "nvidia_minimax_m3_1_flash",
         provider = "NVIDIA_NIM",
-        modelName = "meta/llama-3.3-70b-instruct",
-        title = "NVIDIA NIM — Llama 3.3 70B",
-        subtitle = "Frontier open-weights LLM hosted on high-throughput NVIDIA NIM",
+        modelName = "minimaxai/minimax-m3.1-flash",
+        title = "NVIDIA NIM — Minimax M3.1 Flash",
+        subtitle = "Confirmed working model on NVIDIA NIM",
         requiresApiKey = true,
         badgeLabel = "NVIDIA",
         badgeColor = Color(0xFF76B900)
-    ),
-    AiModelItem(
-        id = "nvidia_nemotron_70b",
-        provider = "NVIDIA_NIM",
-        modelName = "nvidia/llama-3.1-nemotron-70b-instruct",
-        title = "NVIDIA NIM — Nemotron 70B",
-        subtitle = "Custom instruction-tuned model for strict JSON schema output",
-        requiresApiKey = true,
-        badgeLabel = "NVIDIA",
-        badgeColor = Color(0xFF76B900)
-    ),
-    AiModelItem(
-        id = "nvidia_mistral_large",
-        provider = "NVIDIA_NIM",
-        modelName = "mistralai/mistral-large-2-instruct",
-        title = "NVIDIA NIM — Mistral Large 2",
-        subtitle = "Multilingual high-reasoning engine served via NVIDIA cloud",
-        requiresApiKey = true,
-        badgeLabel = "NVIDIA",
-        badgeColor = Color(0xFF76B900)
-    ),
-    AiModelItem(
-        id = "openai_gpt_4o_mini",
-        provider = "OPENAI",
-        modelName = "gpt-4o-mini",
-        title = "OpenAI — GPT-4o Mini",
-        subtitle = "Affordable, rapid food parsing from OpenAI",
-        requiresApiKey = true,
-        badgeLabel = "OpenAI",
-        badgeColor = Color(0xFF10A37F)
-    ),
-    AiModelItem(
-        id = "openai_gpt_4o",
-        provider = "OPENAI",
-        modelName = "gpt-4o",
-        title = "OpenAI — GPT-4o Flagship",
-        subtitle = "Top-tier frontier multimodal LLM",
-        requiresApiKey = true,
-        badgeLabel = "OpenAI",
-        badgeColor = Color(0xFF10A37F)
     ),
     AiModelItem(
         id = "local_offline",
         provider = "LOCAL",
         modelName = "local-smart",
         title = "Local Smart Engine (Offline)",
-        subtitle = "100% on-device & private. No API key required, zero latency",
+        subtitle = "100% on-device & private. No API key required",
         requiresApiKey = false,
         badgeLabel = "Offline",
         badgeColor = PrimaryGreen
@@ -192,15 +144,24 @@ val AVAILABLE_AI_MODELS = listOf(
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
+    onSaveComplete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val currentGoals by viewModel.goals.collectAsStateWithLifecycle()
     val currentAppSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val saveMessage by viewModel.saveMessage.collectAsStateWithLifecycle()
+    val testError by viewModel.testError.collectAsStateWithLifecycle()
+    val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
+    val saveResult by viewModel.saveResult.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     val goals = currentGoals ?: NutritionGoalEntity()
     val appSettings = currentAppSettings ?: AppSettingsEntity()
+
+    // Initialize originals for unsaved changes tracking
+    LaunchedEffect(goals, appSettings) {
+        viewModel.initializeOriginals(goals, appSettings)
+    }
 
     // Determine currently active AI model option
     val initialModelOption = remember(appSettings) {
@@ -208,11 +169,10 @@ fun SettingsScreen(
             "GEMINI" -> AVAILABLE_AI_MODELS.find { it.provider == "GEMINI" && it.modelName == appSettings.geminiModel }
                 ?: AVAILABLE_AI_MODELS[0]
             "NVIDIA_NIM" -> AVAILABLE_AI_MODELS.find { it.provider == "NVIDIA_NIM" && it.modelName == appSettings.nvidiaModel }
-                ?: AVAILABLE_AI_MODELS[2]
+                ?: AVAILABLE_AI_MODELS.find { it.provider == "NVIDIA_NIM" } ?: AVAILABLE_AI_MODELS[0]
             "OPENAI" -> AVAILABLE_AI_MODELS.find { it.provider == "OPENAI" && it.modelName == appSettings.openaiModel }
-                ?: AVAILABLE_AI_MODELS[5]
-            "LOCAL" -> AVAILABLE_AI_MODELS.find { it.provider == "LOCAL" }
-                ?: AVAILABLE_AI_MODELS.last()
+                ?: AVAILABLE_AI_MODELS.find { it.provider == "OPENAI" } ?: AVAILABLE_AI_MODELS[0]
+            "LOCAL" -> AVAILABLE_AI_MODELS.find { it.provider == "LOCAL" } ?: AVAILABLE_AI_MODELS[0]
             else -> AVAILABLE_AI_MODELS[0]
         }
     }
@@ -221,10 +181,10 @@ fun SettingsScreen(
     var isModelDropdownExpanded by remember { mutableStateOf(false) }
 
     // API Keys state
-    var geminiApiKey by remember(appSettings) { mutableStateOf(appSettings.geminiApiKey) }
-    var nvidiaApiKey by remember(appSettings) { mutableStateOf(appSettings.nvidiaApiKey) }
-    var nvidiaBaseUrl by remember(appSettings) { mutableStateOf(appSettings.nvidiaBaseUrl) }
-    var openaiApiKey by remember(appSettings) { mutableStateOf(appSettings.openaiApiKey) }
+    var geminiApiKey by remember(appSettings) { mutableStateOf(appSettings.geminiApiKey.trim()) }
+    var nvidiaApiKey by remember(appSettings) { mutableStateOf(appSettings.nvidiaApiKey.trim()) }
+    var nvidiaBaseUrl by remember(appSettings) { mutableStateOf(appSettings.nvidiaBaseUrl.trim()) }
+    var openaiApiKey by remember(appSettings) { mutableStateOf(appSettings.openaiApiKey.trim()) }
 
     var showGeminiKey by remember { mutableStateOf(false) }
     var showNvidiaKey by remember { mutableStateOf(false) }
@@ -237,6 +197,10 @@ fun SettingsScreen(
     var fatTarget by remember(goals) { mutableStateOf("${goals.fatGoal.toInt()}") }
     var waterTarget by remember(goals) { mutableStateOf("${goals.waterGoalMl}") }
 
+    // Water cup sizes
+    var cupSize1Target by remember(appSettings) { mutableStateOf("${appSettings.cupSize1Ml}") }
+    var cupSize2Target by remember(appSettings) { mutableStateOf("${appSettings.cupSize2Ml}") }
+
     // Profile
     var weightText by remember(goals) { mutableStateOf(goals.currentWeightKg?.toString() ?: "") }
     var targetWeightText by remember(goals) { mutableStateOf(goals.targetWeightKg?.toString() ?: "") }
@@ -244,14 +208,75 @@ fun SettingsScreen(
     var ageText by remember(goals) { mutableStateOf(goals.age?.toString() ?: "") }
     var activityLevel by remember(goals) { mutableStateOf(goals.activityLevel) }
 
+    // Start date
+    var useStartDateLocal by remember(appSettings) { mutableStateOf(appSettings.useStartDate) }
+    var startDateLocal by remember(appSettings) { mutableStateOf(appSettings.startDate) }
+    var blockBeforeStartLocal by remember(appSettings) { mutableStateOf(appSettings.blockBeforeStartDate) }
+    var blockAfterTodayLocal by remember(appSettings) { mutableStateOf(appSettings.blockAfterToday) }
+
     var activityMenuExpanded by remember { mutableStateOf(false) }
     val activityLevels = listOf("Sedentary", "Light", "Moderate", "Very Active", "Extra Active")
+
+    // Track selected AI model
+    LaunchedEffect(selectedModelOption) {
+        viewModel.setSelectedAiModel(selectedModelOption.provider, selectedModelOption.modelName)
+    }
+
+    // Unsaved changes tracking
+    var hasUnsavedChanges by remember { mutableStateOf(false) }
+
+    LaunchedEffect(
+        geminiApiKey, nvidiaApiKey, openaiApiKey, nvidiaBaseUrl,
+        calTarget, proteinTarget, carbsTarget, fatTarget, waterTarget,
+        cupSize1Target, cupSize2Target,
+        weightText, targetWeightText, heightText, ageText, activityLevel,
+        useStartDateLocal, startDateLocal, blockBeforeStartLocal, blockAfterTodayLocal
+    ) {
+        if (viewModel.hasUnsavedChanges(
+            currentGoals, currentAppSettings,
+            geminiApiKey, nvidiaApiKey, openaiApiKey, nvidiaBaseUrl,
+            calTarget, proteinTarget, carbsTarget, fatTarget, waterTarget,
+            cupSize1Target, cupSize2Target,
+            weightText, targetWeightText, heightText, ageText, activityLevel,
+            useStartDateLocal, startDateLocal, blockBeforeStartLocal, blockAfterTodayLocal
+        )) {
+            hasUnsavedChanges = true
+        }
+    }
 
     LaunchedEffect(saveMessage) {
         saveMessage?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
         }
+    }
+
+    var showTestErrorDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(testError) {
+        if (testError != null) {
+            showTestErrorDialog = true
+        }
+    }
+
+    var showUnsavedDialog by remember { mutableStateOf(false) }
+
+    // Handle save result - navigate to dashboard on success
+    LaunchedEffect(saveResult) {
+        saveResult?.let { result ->
+            if (result.success && result.navigateToDashboard) {
+                viewModel.clearSaveResult()
+                onSaveComplete()
+            } else if (result.success) {
+                viewModel.clearSaveResult()
+                hasUnsavedChanges = false
+                viewModel.clearMessage()
+            }
+        }
+    }
+
+    // Back handler for unsaved changes
+    androidx.activity.compose.BackHandler(enabled = hasUnsavedChanges) {
+        showUnsavedDialog = true
     }
 
     Scaffold(
@@ -279,7 +304,7 @@ fun SettingsScreen(
                     )
                 )
                 Text(
-                    text = "AI Model Details & Goals",
+                    text = "AI Model & General Settings",
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
@@ -288,7 +313,7 @@ fun SettingsScreen(
             }
 
             // =====================================================================
-            // 1. CHANGE AI MODEL DETAILS & DYNAMIC API KEY CARD
+            // 1. AI MODEL & API KEY CARD
             // =====================================================================
             item {
                 Card(
@@ -301,7 +326,6 @@ fun SettingsScreen(
                         modifier = Modifier.padding(18.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        // Section Header
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -316,7 +340,7 @@ fun SettingsScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Change AI Model Details",
+                                    text = "AI Model & API Key",
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = TextPrimary
@@ -324,7 +348,6 @@ fun SettingsScreen(
                                 )
                             }
 
-                            // Current active provider badge
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
@@ -341,13 +364,11 @@ fun SettingsScreen(
                         }
 
                         Text(
-                            text = "Select your AI engine from the dropdown below. When you log meals (e.g. 46g of food with 100g serving), the AI extracts the exact proportional multiplier (0.46) and matches inventory foods.",
+                            text = "Select your AI engine and enter your API key. When you log meals, the AI extracts the exact proportional multiplier and matches inventory foods.",
                             style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
                         )
 
-                        // -----------------------------------------------------------------
-                        // AI MODEL DROPDOWN SELECTOR
-                        // -----------------------------------------------------------------
+                        // AI MODEL DROPDOWN
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 text = "SELECT AI MODEL",
@@ -474,9 +495,7 @@ fun SettingsScreen(
                             }
                         }
 
-                        // -----------------------------------------------------------------
-                        // DYNAMIC API KEY INPUT (ONLY IF SELECTED AI REQUIRES API KEY)
-                        // -----------------------------------------------------------------
+                        // API KEY INPUT
                         if (selectedModelOption.requiresApiKey) {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Row(
@@ -509,11 +528,11 @@ fun SettingsScreen(
                                                 val defaultKey = try { BuildConfig.GEMINI_API_KEY } catch (e: Exception) { "" }
                                                 Text(if (defaultKey.isNotBlank() && defaultKey != "MY_GEMINI_API_KEY") "Using injected key from Secrets" else "Paste your AI Studio Gemini API key")
                                             },
-                                            visualTransformation = if (showGeminiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                                            visualTransformation = if (false) VisualTransformation.None else PasswordVisualTransformation(),
                                             trailingIcon = {
-                                                IconButton(onClick = { showGeminiKey = !showGeminiKey }) {
+                                                IconButton(onClick = { /* visibility toggle removed for simplicity */ }) {
                                                     Icon(
-                                                        imageVector = if (showGeminiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                        imageVector = Icons.Default.Visibility,
                                                         contentDescription = "Toggle key visibility",
                                                         tint = PrimaryGreen,
                                                         modifier = Modifier.size(20.dp)
@@ -535,7 +554,7 @@ fun SettingsScreen(
                                                 .padding(10.dp)
                                         ) {
                                             Text(
-                                                text = "Google AI Studio API key. Enter here or configure GEMINI_API_KEY in the Secrets panel. Model: ${selectedModelOption.modelName}.",
+                                                text = "Google AI Studio API key. Model: ${selectedModelOption.modelName}.",
                                                 style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 11.sp)
                                             )
                                         }
@@ -545,19 +564,9 @@ fun SettingsScreen(
                                         OutlinedTextField(
                                             value = nvidiaApiKey,
                                             onValueChange = { nvidiaApiKey = it },
-                                            label = { Text("NVIDIA NIM API Key (nvapi-...)") },
+                                            label = { Text("NVIDIA NIM API Key") },
                                             placeholder = { Text("nvapi-...") },
-                                            visualTransformation = if (showNvidiaKey) VisualTransformation.None else PasswordVisualTransformation(),
-                                            trailingIcon = {
-                                                IconButton(onClick = { showNvidiaKey = !showNvidiaKey }) {
-                                                    Icon(
-                                                        imageVector = if (showNvidiaKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                                        contentDescription = "Toggle key visibility",
-                                                        tint = PrimaryGreen,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                            },
+                                            visualTransformation = if (false) VisualTransformation.None else PasswordVisualTransformation(),
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .testTag("nvidia_api_key_input"),
@@ -583,7 +592,7 @@ fun SettingsScreen(
                                                 .padding(10.dp)
                                         ) {
                                             Text(
-                                                text = "Get your API key at build.nvidia.com. Model: ${selectedModelOption.modelName}. NVIDIA NIM parses foods and calculates multiplier math.",
+                                                text = "NVIDIA NIM API key from build.nvidia.com. Model: ${selectedModelOption.modelName}.",
                                                 style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 11.sp)
                                             )
                                         }
@@ -593,19 +602,9 @@ fun SettingsScreen(
                                         OutlinedTextField(
                                             value = openaiApiKey,
                                             onValueChange = { openaiApiKey = it },
-                                            label = { Text("OpenAI API Key (sk-...)") },
+                                            label = { Text("OpenAI API Key") },
                                             placeholder = { Text("sk-...") },
-                                            visualTransformation = if (showOpenAiKey) VisualTransformation.None else PasswordVisualTransformation(),
-                                            trailingIcon = {
-                                                IconButton(onClick = { showOpenAiKey = !showOpenAiKey }) {
-                                                    Icon(
-                                                        imageVector = if (showOpenAiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                                        contentDescription = "Toggle key visibility",
-                                                        tint = PrimaryGreen,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                            },
+                                            visualTransformation = if (false) VisualTransformation.None else PasswordVisualTransformation(),
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .testTag("openai_api_key_input"),
@@ -628,77 +627,59 @@ fun SettingsScreen(
                                     }
                                 }
                             }
-                        } else {
-                            // LOCAL - No API key required
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFF0F261B))
-                                    .border(1.dp, PrimaryGreen.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                                    .padding(14.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.Top) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = "No key needed",
-                                        tint = PrimaryGreen,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(
-                                            text = "100% On-Device & Offline — No API Key Required",
-                                            style = MaterialTheme.typography.titleSmall.copy(
-                                                color = PrimaryGreen,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "The local engine matches your food inventory and calculates exact proportional multipliers (e.g. 46g / 100g = 0.46) right on your phone without internet access or API credentials.",
-                                            style = MaterialTheme.typography.bodySmall.copy(
-                                                color = TextSecondary,
-                                                fontSize = 11.sp
-                                            )
-                                        )
-                                    }
-                                }
-                            }
                         }
 
-                        // Dedicated "Save AI Model Details" Button
+                        // SAVE API BUTTON
                         Button(
                             onClick = {
                                 val updatedSettings = appSettings.copy(
                                     aiProvider = selectedModelOption.provider,
-                                    geminiApiKey = geminiApiKey.trim(),
+                                    geminiApiKey = if (selectedModelOption.provider == "GEMINI") geminiApiKey.trim() else appSettings.geminiApiKey,
                                     geminiModel = if (selectedModelOption.provider == "GEMINI") selectedModelOption.modelName else appSettings.geminiModel,
-                                    nvidiaApiKey = nvidiaApiKey.trim(),
+                                    nvidiaApiKey = if (selectedModelOption.provider == "NVIDIA_NIM") nvidiaApiKey.trim() else appSettings.nvidiaApiKey,
                                     nvidiaModel = if (selectedModelOption.provider == "NVIDIA_NIM") selectedModelOption.modelName else appSettings.nvidiaModel,
-                                    nvidiaBaseUrl = nvidiaBaseUrl.trim().ifBlank { "https://integrate.api.nvidia.com/v1" },
-                                    openaiApiKey = openaiApiKey.trim(),
+                                    nvidiaBaseUrl = if (selectedModelOption.provider == "NVIDIA_NIM") nvidiaBaseUrl.trim().ifBlank { "https://integrate.api.nvidia.com/v1" } else appSettings.nvidiaBaseUrl,
+                                    openaiApiKey = if (selectedModelOption.provider == "OPENAI") openaiApiKey.trim() else appSettings.openaiApiKey,
                                     openaiModel = if (selectedModelOption.provider == "OPENAI") selectedModelOption.modelName else appSettings.openaiModel
                                 )
-                                viewModel.updateAiSettings(updatedSettings)
+                                viewModel.saveApiSettings(updatedSettings)
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp)
-                                .testTag("save_ai_settings_button"),
+                                .testTag("save_api_button"),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = ProgressCyanBlue,
                                 contentColor = Color.White
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Save AI Model & Key",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.labelLarge
-                            )
+                            if (isTesting) {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier.size(20.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = Color.White
+                                    )
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Save API Key",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -718,16 +699,58 @@ fun SettingsScreen(
                         modifier = Modifier.padding(18.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Flag, contentDescription = null, tint = PrimaryGreen, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Daily Nutritional Targets",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Flag, contentDescription = null, tint = PrimaryGreen, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Daily Nutritional Targets",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary
+                                    )
                                 )
-                            )
+                            }
+
+                            // Autofill button
+                            Button(
+                                onClick = {
+                                    val age = ageText.toIntOrNull()
+                                    val weightKg = weightText.toDoubleOrNull()
+                                    val targetWeightKg = targetWeightText.toDoubleOrNull()
+                                    val heightCm = heightText.toDoubleOrNull()
+                                    val result = viewModel.calculateNutrition(
+                                        age = age,
+                                        sex = goals.sex ?: "",
+                                        currentWeightKg = weightKg,
+                                        targetWeightKg = targetWeightKg,
+                                        heightCm = heightCm,
+                                        activityLevel = activityLevel
+                                    )
+                                    if (result != null) {
+                                        calTarget = result.calories.toString()
+                                        proteinTarget = result.protein.toString()
+                                        carbsTarget = result.carbs.toString()
+                                        fatTarget = result.fat.toString()
+                                    }
+                                },
+                                modifier = Modifier.height(40.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SurfaceBorder,
+                                    contentColor = TextSecondary
+                                ),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    text = "Autofill",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         }
 
                         OutlinedTextField(
@@ -787,21 +810,72 @@ fun SettingsScreen(
             }
 
             // =====================================================================
-            // TRACKING START DATE
+            // 3. WATER CUP SIZES
             // =====================================================================
             item {
-                val useStartDate = appSettings.useStartDate
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.LocalDrink, contentDescription = null, tint = WaterCyan, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Water Cup Sizes",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                            )
+                        }
+
+                        Text(
+                            text = "Set your two preferred cup sizes. These appear as quick-add buttons in Water Intake.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = cupSize1Target,
+                                onValueChange = { cupSize1Target = it.filter { c -> c.isDigit() } },
+                                label = { Text("Cup 1 (ml)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f).testTag("cup_size_1_input"),
+                                colors = customTextFieldColors(),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = cupSize2Target,
+                                onValueChange = { cupSize2Target = it.filter { c -> c.isDigit() } },
+                                label = { Text("Cup 2 (ml)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f).testTag("cup_size_2_input"),
+                                colors = customTextFieldColors(),
+                                singleLine = true
+                            )
+                        }
+                    }
+                }
+            }
+
+            // =====================================================================
+            // 4. TRACKING START DATE
+            // =====================================================================
+            item {
                 val startDate = appSettings.startDate
-                val blockBeforeStartDate = appSettings.blockBeforeStartDate
-                val blockAfterToday = appSettings.blockAfterToday
 
                 var showStartDatePicker by remember { mutableStateOf(false) }
-                var useStartDateLocal by remember(appSettings) { mutableStateOf(appSettings.useStartDate) }
-                var blockBeforeStartLocal by remember(appSettings) { mutableStateOf(appSettings.blockBeforeStartDate) }
-                var blockAfterTodayLocal by remember(appSettings) { mutableStateOf(appSettings.blockAfterToday) }
 
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Use Start Date toggle
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -825,12 +899,6 @@ fun SettingsScreen(
                             checked = useStartDateLocal,
                             onCheckedChange = { checked ->
                                 useStartDateLocal = checked
-                                viewModel.saveStartDateSettings(
-                                    useStartDate = checked,
-                                    startDate = if (checked && startDate != null) startDate else null,
-                                    blockBeforeStartDate = blockBeforeStartLocal,
-                                    blockAfterToday = blockAfterTodayLocal
-                                )
                             },
                             colors = androidx.compose.material3.SwitchDefaults.colors(
                                 checkedTrackColor = PrimaryGreen,
@@ -844,19 +912,19 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = if (!useStartDate) {
+                        text = if (!useStartDateLocal) {
                             "Start date tracking is disabled — all days are trackable."
-                        } else if (startDate == null) {
+                        } else if (startDateLocal == null) {
                             "Start date enabled but not set — set a date below."
                         } else {
-                            "Tracking starts from $startDate. Days before this date are untrackable."
+                            "Tracking starts from $startDateLocal. Days before this date are untrackable."
                         },
                         style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    if (useStartDate) {
+                    if (useStartDateLocal) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -867,13 +935,13 @@ fun SettingsScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = ProgressCyanBlue, contentColor = Color.White),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text(if (startDate == null) "Set Start Date" else "Change Start Date")
+                                Text(if (startDateLocal == null) "Set Start Date" else "Change Start Date")
                             }
 
-                            if (startDate != null) {
+                            if (startDateLocal != null) {
                                 TextButton(
                                     onClick = {
-                                        viewModel.saveStartDate(null)
+                                        startDateLocal = null
                                         showStartDatePicker = false
                                     }
                                 ) {
@@ -884,7 +952,6 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Block before start date checkbox
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -893,12 +960,6 @@ fun SettingsScreen(
                                 checked = blockBeforeStartLocal,
                                 onCheckedChange = { checked ->
                                     blockBeforeStartLocal = checked
-                                    viewModel.saveStartDateSettings(
-                                        useStartDate = useStartDateLocal,
-                                        startDate = if (useStartDateLocal && startDate != null) startDate else null,
-                                        blockBeforeStartDate = checked,
-                                        blockAfterToday = blockAfterTodayLocal
-                                    )
                                 },
                                 colors = androidx.compose.material3.CheckboxDefaults.colors(
                                     checkedColor = PrimaryGreen,
@@ -918,7 +979,6 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Block after today checkbox (always visible, independent of use start date)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -927,12 +987,6 @@ fun SettingsScreen(
                             checked = blockAfterTodayLocal,
                             onCheckedChange = { checked ->
                                 blockAfterTodayLocal = checked
-                                viewModel.saveStartDateSettings(
-                                    useStartDate = useStartDateLocal,
-                                    startDate = if (useStartDateLocal && startDate != null) startDate else null,
-                                    blockBeforeStartDate = blockBeforeStartLocal,
-                                    blockAfterToday = checked
-                                )
                             },
                             colors = androidx.compose.material3.CheckboxDefaults.colors(
                                 checkedColor = PrimaryGreen,
@@ -950,19 +1004,11 @@ fun SettingsScreen(
                     }
                 }
 
-                // Start date settings are saved directly in each control's onCheckedChange
-                // above — no auto-save on recomposition/scroll.
-
                 if (showStartDatePicker && useStartDateLocal) {
                     StartDatePickerDialog(
-                        initialDate = startDate?.let { LocalDate.parse(it) },
+                        initialDate = startDateLocal?.let { LocalDate.parse(it) },
                         onConfirm = { selected ->
-                            viewModel.saveStartDateSettings(
-                                useStartDate = true,
-                                startDate = selected.toString(),
-                                blockBeforeStartDate = blockBeforeStartLocal,
-                                blockAfterToday = blockAfterTodayLocal
-                            )
+                            startDateLocal = selected.toString()
                             showStartDatePicker = false
                         },
                         onDismiss = { showStartDatePicker = false }
@@ -971,7 +1017,7 @@ fun SettingsScreen(
             }
 
             // =====================================================================
-            // 3. PROFILE SECTION
+            // 5. PROFILE SECTION
             // =====================================================================
             item {
                 Card(
@@ -1044,7 +1090,6 @@ fun SettingsScreen(
                             )
                         }
 
-                        // Activity Level Dropdown
                         Box {
                             OutlinedButton(
                                 onClick = { activityMenuExpanded = true },
@@ -1081,59 +1126,125 @@ fun SettingsScreen(
                 }
             }
 
-            // Overall Save Button (saves goals + AI configuration)
+            // =====================================================================
+            // SAVE BUTTONS
+            // =====================================================================
             item {
-                Button(
-                    onClick = {
-                        val cal = calTarget.toDoubleOrNull() ?: 2200.0
-                        val prot = proteinTarget.toDoubleOrNull() ?: 140.0
-                        val carbs = carbsTarget.toDoubleOrNull() ?: 220.0
-                        val fat = fatTarget.toDoubleOrNull() ?: 65.0
-                        val water = waterTarget.toIntOrNull() ?: 3000
-
-                        val updatedGoals = goals.copy(
-                            caloriesGoal = cal,
-                            proteinGoal = prot,
-                            carbsGoal = carbs,
-                            fatGoal = fat,
-                            waterGoalMl = water,
-                            currentWeightKg = weightText.toDoubleOrNull(),
-                            targetWeightKg = targetWeightText.toDoubleOrNull(),
-                            heightCm = heightText.toDoubleOrNull(),
-                            age = ageText.toIntOrNull(),
-                            activityLevel = activityLevel
-                        )
-
-                        val updatedSettings = appSettings.copy(
-                            aiProvider = selectedModelOption.provider,
-                            geminiApiKey = geminiApiKey.trim(),
-                            geminiModel = if (selectedModelOption.provider == "GEMINI") selectedModelOption.modelName else appSettings.geminiModel,
-                            nvidiaApiKey = nvidiaApiKey.trim(),
-                            nvidiaModel = if (selectedModelOption.provider == "NVIDIA_NIM") selectedModelOption.modelName else appSettings.nvidiaModel,
-                            nvidiaBaseUrl = nvidiaBaseUrl.trim().ifBlank { "https://integrate.api.nvidia.com/v1" },
-                            openaiApiKey = openaiApiKey.trim(),
-                            openaiModel = if (selectedModelOption.provider == "OPENAI") selectedModelOption.modelName else appSettings.openaiModel
-                        )
-
-                        viewModel.updateGoalsAndSettings(updatedGoals, updatedSettings)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .testTag("save_settings_button"),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ProgressCyanBlue,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(14.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Save All Settings & Goals",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleSmall
-                    )
+                    Button(
+                        onClick = {
+                            val updatedSettings = appSettings.copy(
+                                aiProvider = selectedModelOption.provider,
+                                geminiApiKey = geminiApiKey.trim(),
+                                geminiModel = selectedModelOption.modelName,
+                                nvidiaApiKey = appSettings.nvidiaApiKey,
+                                nvidiaModel = appSettings.nvidiaModel,
+                                nvidiaBaseUrl = appSettings.nvidiaBaseUrl,
+                                openaiApiKey = appSettings.openaiApiKey,
+                                openaiModel = appSettings.openaiModel
+                            )
+                            viewModel.saveApiSettings(updatedSettings)
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp)
+                            .testTag("save_api_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ProgressCyanBlue,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        if (isTesting) {
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier.size(20.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Save API",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            val cal = calTarget.toDoubleOrNull() ?: 2200.0
+                            val prot = proteinTarget.toDoubleOrNull() ?: 140.0
+                            val carbs = carbsTarget.toDoubleOrNull() ?: 220.0
+                            val fat = fatTarget.toDoubleOrNull() ?: 65.0
+                            val water = waterTarget.toIntOrNull() ?: 3000
+                            val cup1 = cupSize1Target.toIntOrNull() ?: 250
+                            val cup2 = cupSize2Target.toIntOrNull() ?: 500
+
+                            val updatedGoals = goals.copy(
+                                caloriesGoal = cal,
+                                proteinGoal = prot,
+                                carbsGoal = carbs,
+                                fatGoal = fat,
+                                waterGoalMl = water,
+                                currentWeightKg = weightText.toDoubleOrNull(),
+                                targetWeightKg = targetWeightText.toDoubleOrNull(),
+                                heightCm = heightText.toDoubleOrNull(),
+                                age = ageText.toIntOrNull(),
+                                activityLevel = activityLevel,
+                                sex = goals.sex
+                            )
+
+                            val updatedSettings = appSettings.copy(
+                                cupSize1Ml = cup1,
+                                cupSize2Ml = cup2,
+                                useStartDate = useStartDateLocal,
+                                startDate = if (useStartDateLocal && startDateLocal != null) startDateLocal else null,
+                                blockBeforeStartDate = blockBeforeStartLocal,
+                                blockAfterToday = blockAfterTodayLocal
+                            )
+
+                            viewModel.saveGeneralSettings(updatedGoals, updatedSettings)
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(52.dp)
+                            .testTag("save_general_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PrimaryGreen,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Save General",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                    }
                 }
             }
 
@@ -1142,21 +1253,80 @@ fun SettingsScreen(
             }
         }
     }
+
+    // API Key test error dialog
+    if (showTestErrorDialog && testError != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showTestErrorDialog = false
+                viewModel.clearTestError()
+            },
+            title = { Text("API Key Test Failed", color = TextPrimary) },
+            text = {
+                Text(testError ?: "", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showTestErrorDialog = false
+                        viewModel.clearTestError()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ClassicRed, contentColor = Color.White),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("OK", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showTestErrorDialog = false
+                    viewModel.clearTestError()
+                }) {
+                    Text("Cancel", color = TextMuted)
+                }
+            },
+            containerColor = SurfaceDark
+        )
+    }
+
+    // Unsaved changes dialog
+    if (showUnsavedDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showUnsavedDialog = false
+            },
+            title = { Text("Unsaved Changes", color = TextPrimary) },
+            text = {
+                Text("You have unsaved changes. Do you want to keep them or revert?", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showUnsavedDialog = false
+                        // Navigate away (keep changes)
+                        onSaveComplete()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen, contentColor = Color.White),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Keep Changes", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showUnsavedDialog = false
+                    hasUnsavedChanges = false
+                    // Navigate away (revert changes)
+                    onSaveComplete()
+                }) {
+                    Text("Revert", color = TextMuted)
+                }
+            },
+            containerColor = SurfaceDark
+        )
+    }
 }
 
-@Composable
-private fun customTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = TextPrimary,
-    unfocusedTextColor = TextPrimary,
-    focusedContainerColor = Color(0xFF13171F),
-    unfocusedContainerColor = Color(0xFF13171F),
-    focusedBorderColor = ProgressCyanBlue,
-    unfocusedBorderColor = SurfaceBorder
-)
-
-// -------------------------------------------------------------------------
-// CUSTOM START-DATE PICKER (kept dependency-free: no Material 3 DatePickerDialog)
-// -------------------------------------------------------------------------
 @Composable
 private fun StartDatePickerDialog(
     initialDate: LocalDate?,
@@ -1170,7 +1340,6 @@ private fun StartDatePickerDialog(
 
     val yearMonth = YearMonth.of(year, month)
     val daysInMonth = yearMonth.lengthOfMonth()
-    // DayOfWeek: MONDAY=1 ... SUNDAY=7 -> we want SUN=0 ... SAT=6
     val firstDayOffset = (LocalDate.of(year, month, 1).dayOfWeek.value % 7)
     val totalCells = firstDayOffset + daysInMonth
 
@@ -1247,7 +1416,6 @@ private fun StartDatePickerDialog(
                     columns = GridCells.Fixed(7),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Weekday headers (one grid cell each)
                     listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat").forEach { wd ->
                         item {
                             Box(
@@ -1265,7 +1433,6 @@ private fun StartDatePickerDialog(
                         }
                     }
 
-                    // Days
                     items(totalCells, key = { it.toString() }) { idx ->
                         val day = idx - firstDayOffset + 1
                         val isValid = day in 1..daysInMonth
@@ -1312,6 +1479,17 @@ private fun StartDatePickerDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cancel", color = TextMuted)
             }
-        }
+        },
+        containerColor = SurfaceDark
     )
 }
+
+@Composable
+private fun customTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary,
+    focusedContainerColor = Color(0xFF13171F),
+    unfocusedContainerColor = Color(0xFF13171F),
+    focusedBorderColor = ProgressCyanBlue,
+    unfocusedBorderColor = SurfaceBorder
+)

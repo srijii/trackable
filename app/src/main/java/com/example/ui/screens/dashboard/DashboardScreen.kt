@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.database.FoodLogEntity
+import com.example.data.database.NutritionGoalEntity
 import com.example.ui.components.AiConfirmationDialog
 import com.example.ui.screens.inventory.NutritionLabelScannerDialog
 import com.example.ui.components.ScreenshotAiInputBar
@@ -81,6 +82,7 @@ fun DashboardScreen(
     val weekSummaries by viewModel.weekSummaries.collectAsStateWithLifecycle()
     val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
+    val goals by viewModel.goals.collectAsStateWithLifecycle()
     val aiIsLoading by viewModel.aiIsLoading.collectAsStateWithLifecycle()
     val aiParseResult by viewModel.aiParseResult.collectAsStateWithLifecycle()
     val feedbackMessage by viewModel.userFeedbackMessage.collectAsStateWithLifecycle()
@@ -154,9 +156,21 @@ fun DashboardScreen(
 
             // 3. Set Your Calorie Goal Warning Banner
             val isWarningDismissed = appSettings?.dismissedGoalWarning == true
-            if (!isWarningDismissed) {
+            val goalsFilled = goals?.name?.isNotBlank() == true &&
+                goals?.sex?.isNotBlank() == true &&
+                goals?.age != null &&
+                goals?.currentWeightKg != null &&
+                goals?.heightCm != null
+            val targetsFilled = goals?.caloriesGoal != 2200.0 ||
+                goals?.proteinGoal != 140.0 ||
+                goals?.carbsGoal != 220.0 ||
+                goals?.fatGoal != 65.0
+            val showOnboardingWarning = !goalsFilled || !targetsFilled
+
+            if (!isWarningDismissed && showOnboardingWarning) {
                 item {
                     ScreenshotCalorieGoalWarningBanner(
+                        goals = goals ?: NutritionGoalEntity(),
                         onTap = onNavigateToSettings,
                         onDismiss = { viewModel.dismissGoalWarning() }
                     )
@@ -179,9 +193,11 @@ fun DashboardScreen(
                     AnimatedWaterCard(
                         waterConsumedMl = summary.totalWaterMl,
                         waterGoalMl = summary.waterGoalMl,
-                        onAddCup = { viewModel.addWaterCup() },
+                        cupSize1Ml = appSettings?.cupSize1Ml ?: 250,
+                        cupSize2Ml = appSettings?.cupSize2Ml ?: 500,
+                        onAddCup1 = { viewModel.addWaterCupSize1() },
                         onRemoveCup = { viewModel.removeWaterCup() },
-                        onAddAmount = { viewModel.addWater(it) }
+                        onAddCup2 = { viewModel.addWaterCupSize2() }
                     )
                 }
             }
