@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.util.Locale
 
 data class NutritionCalculationResult(
     val goal: String, // "gain", "loss", "maintenance"
@@ -75,7 +76,7 @@ class OnboardingViewModel(
         }
 
         // 2. BMR — Mifflin-St Jeor
-        val bmr = when (sex.lowercase()) {
+        val bmr = when (sex.lowercase(Locale.ROOT)) {
             "male" -> 10.0 * weightW + 6.25 * heightH - 5.0 * ageA + 5.0
             "female" -> 10.0 * weightW + 6.25 * heightH - 5.0 * ageA - 161.0
             else -> 10.0 * weightW + 6.25 * heightH - 5.0 * ageA + 5.0

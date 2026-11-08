@@ -37,7 +37,7 @@ class WeightTrackerViewModel(
     fun logWeight(date: LocalDate, weightKg: Double, note: String = "") {
         viewModelScope.launch {
             repository.logWeight(date, weightKg, note)
-            _feedbackMessage.value = "Weight logged: ${String.format("%.1f", weightKg)} kg for ${date}"
+            _feedbackMessage.value = "Weight logged: ${String.format(java.util.Locale.US, "%.1f", weightKg)} kg for ${date}"
         }
     }
 

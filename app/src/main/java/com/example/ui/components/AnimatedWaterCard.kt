@@ -102,8 +102,8 @@ fun AnimatedWaterCard(
     )
 
     val waterRemainingMl = (waterGoalMl - waterConsumedMl).coerceAtLeast(0)
-    val litersConsumed = String.format("%.1f", waterConsumedMl / 1000.0)
-    val litersGoal = String.format("%.1f", waterGoalMl / 1000.0)
+    val litersConsumed = String.format(java.util.Locale.US, "%.1f", waterConsumedMl / 1000.0)
+    val litersGoal = String.format(java.util.Locale.US, "%.1f", waterGoalMl / 1000.0)
 
     Card(
         modifier = modifier

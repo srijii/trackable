@@ -1,6 +1,7 @@
 package com.example.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Kitchen
@@ -17,6 +18,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     data object WeightTracker : Screen("weight_tracker", "Weight Tracker", Icons.Default.Scale)
     data object Analytics : Screen("analytics", "Analysis", Icons.Default.BarChart)
     data object History : Screen("history", "History", Icons.Default.History)
+    data object BackupRestore : Screen("backup_restore", "Backup & Restore", Icons.Default.Backup)
     data object Settings : Screen("settings", "Settings", Icons.Default.Settings)
 
     companion object {

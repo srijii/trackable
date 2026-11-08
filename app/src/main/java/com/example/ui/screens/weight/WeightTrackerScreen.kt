@@ -104,7 +104,7 @@ fun WeightTrackerScreen(
 
     // Form state
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
-    var weightInputText by remember(currentWeight) { mutableStateOf(String.format("%.1f", currentWeight)) }
+    var weightInputText by remember(currentWeight) { mutableStateOf(String.format(java.util.Locale.US, "%.1f", currentWeight)) }
     var noteInputText by remember { mutableStateOf("") }
     var dateMenuExpanded by remember { mutableStateOf(false) }
 
@@ -199,7 +199,7 @@ fun WeightTrackerScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = String.format("%.1f", currentWeight),
+                                text = String.format(java.util.Locale.US, "%.1f", currentWeight),
                                 style = MaterialTheme.typography.displayMedium.copy(
                                     fontWeight = FontWeight.Black,
                                     color = TextPrimary
@@ -230,7 +230,7 @@ fun WeightTrackerScreen(
                                 Text("TARGET", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 10.sp))
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "${String.format("%.1f", targetWeight)} kg",
+                                    text = "${String.format(java.util.Locale.US, "%.1f", targetWeight)} kg",
                                     style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold)
                                 )
                             }
@@ -242,7 +242,7 @@ fun WeightTrackerScreen(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 val sign = if (diffToTarget > 0) "-" else "+"
                                 Text(
-                                    text = "$sign${String.format("%.1f", kotlin.math.abs(diffToTarget))} kg",
+                                    text = "$sign${String.format(java.util.Locale.US, "%.1f", kotlin.math.abs(diffToTarget))} kg",
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         color = if (diffToTarget <= 0) Color(0xFF10B981) else ClassicRed,
                                         fontWeight = FontWeight.Bold
@@ -257,7 +257,7 @@ fun WeightTrackerScreen(
                                 Text("BMI", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 10.sp))
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = String.format("%.1f", bmi),
+                                    text = String.format(java.util.Locale.US, "%.1f", bmi),
                                     style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold)
                                 )
                             }
@@ -385,7 +385,7 @@ fun WeightTrackerScreen(
                                             .clickable {
                                                 val cur = weightInputText.toDoubleOrNull() ?: currentWeight
                                                 val newW = (cur + delta).coerceAtLeast(20.0)
-                                                weightInputText = String.format("%.1f", newW)
+                                                weightInputText = String.format(java.util.Locale.US, "%.1f", newW)
                                             }
                                             .padding(vertical = 8.dp),
                                         contentAlignment = Alignment.Center
@@ -540,7 +540,7 @@ fun WeightTrackerScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = "${String.format("%.1f", log.weightKg)} kg",
+                                        text = "${String.format(java.util.Locale.US, "%.1f", log.weightKg)} kg",
                                         style = MaterialTheme.typography.titleMedium.copy(
                                             color = TextPrimary,
                                             fontWeight = FontWeight.Bold
@@ -562,7 +562,7 @@ fun WeightTrackerScreen(
                                             )
                                             Spacer(modifier = Modifier.width(2.dp))
                                             Text(
-                                                text = "$sign${String.format("%.1f", diff)} kg",
+                                                text = "$sign${String.format(java.util.Locale.US, "%.1f", diff)} kg",
                                                 style = MaterialTheme.typography.labelSmall.copy(color = color, fontSize = 11.sp)
                                             )
                                         }

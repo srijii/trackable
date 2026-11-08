@@ -53,6 +53,7 @@ import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.WaterCyan
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun HistoryScreen(
@@ -214,7 +215,7 @@ fun HistoryScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = mealCategory.uppercase(),
+                                    text = mealCategory.uppercase(Locale.ROOT),
                                     style = MaterialTheme.typography.labelMedium.copy(
                                         color = TextPrimary,
                                         fontWeight = FontWeight.Bold,

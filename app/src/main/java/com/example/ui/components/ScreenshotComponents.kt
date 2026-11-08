@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,7 +115,6 @@ fun ScreenshotTopHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -208,7 +206,6 @@ fun PageHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .statusBarsPadding()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -301,14 +298,13 @@ fun ScreenshotWeekCalendarStrip(
             val proteinGoal = summary?.proteinGoal ?: 0.0
             val proteinHit = tracked && proteinGoal > 0.0 && summary.totalProtein >= proteinGoal
 
-            // Background: selected always = crimson (even if prohibited), unselected = same SurfacePill
-            val pillColor = when {
-                isSelected -> ClassicRed
-                else -> SurfacePill
-            }
-            // Text color: selected = white, untrackable/untracked = gray, tracked = white, protein goal hit = green
+            // Background: selected + trackable = crimson. Unselectable days never get the
+            // selected red color, even when they happen to be the currently selected date.
+            val pillColor = if (isSelected && trackable) ClassicRed else SurfacePill
+            // Text color: selected + trackable = white, untrackable = gray,
+            // tracked = white, protein goal hit = green
             val dayTextColor = when {
-                isSelected -> Color.White
+                isSelected && trackable -> Color.White
                 !trackable -> TextMuted
                 tracked && proteinHit -> SuccessGreen
                 tracked -> Color.White
@@ -328,14 +324,13 @@ fun ScreenshotWeekCalendarStrip(
                         drawContent() // draws background + day text
                         if (showProhibitionSign) {
                             val size = this.size
-                            val cx = size.width / 2f
-                            val cy = size.height / 2f
-                            val radius = (size.width.coerceAtMost(size.height) / 2f) * 0.85f
-                            val strokePx = 3f.dp.toPx()
-                            // Diagonal line corner to corner (prohibited marker)
+                            val strokePx = 1f.dp.toPx() // thin strikethrough line
+                            val insetPx = 1f.dp.toPx()
+                            // Thin diagonal line from the date's top-left corner to bottom-right corner.
+                            // Only prohibited days draw this line; selectable days stay clean.
                             drawLine(
-                                start = Offset(cx - radius, cy - radius),
-                                end = Offset(cx + radius, cy + radius),
+                                start = Offset(insetPx, insetPx),
+                                end = Offset(size.width - insetPx, size.height - insetPx),
                                 color = Color(0xFF9CA3AF),
                                 strokeWidth = strokePx
                             )
@@ -347,8 +342,8 @@ fun ScreenshotWeekCalendarStrip(
                         text = dayName,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 11.sp,
-                            color = if (isSelected) Color.White else dayTextColor,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            color = if (isSelected && trackable) Color.White else dayTextColor,
+                            fontWeight = if (isSelected && trackable) FontWeight.Bold else FontWeight.Normal
                         )
                     )
                     Spacer(modifier = Modifier.height(2.dp))

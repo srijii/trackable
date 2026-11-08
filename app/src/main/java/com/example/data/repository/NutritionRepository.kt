@@ -1,5 +1,8 @@
 package com.example.data.repository
 
+import androidx.room.withTransaction
+import com.example.data.backup.BackupPayload
+import com.example.data.backup.BackupScope
 import com.example.data.database.AppDatabase
 import com.example.data.database.DatabaseInitializer
 import com.example.data.database.FoodEntity
@@ -113,9 +116,7 @@ class NutritionRepository(private val database: AppDatabase) {
         val latestByDate = weightLogDao.getLatestWeightLog()
         val currentWeight = if (latestByDate != null) latestByDate.weightKg else weightKg
         val currentGoals = getGoals()
-        if (currentGoals != null) {
-            updateGoals(currentGoals.copy(currentWeightKg = currentWeight))
-        }
+        updateGoals(currentGoals.copy(currentWeightKg = currentWeight))
         return entry.id
     }
 
@@ -236,6 +237,74 @@ class NutritionRepository(private val database: AppDatabase) {
         DatabaseInitializer.ensureInitialized(database)
         if (appSettingsDao.getSettings() == null) {
             appSettingsDao.insertOrUpdate(com.example.data.database.AppSettingsEntity())
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Backup & Restore
+    // -----------------------------------------------------------------------
+
+    /** Collects the data for the requested backup scope. */
+    suspend fun buildBackupPayload(scope: BackupScope): BackupPayload = when (scope) {
+        BackupScope.INVENTORY_DIET -> BackupPayload(
+            scope = scope,
+            foods = foodDao.getAllFoodsForBackup(),
+            foodLogs = foodLogDao.getAllLogsForBackup(),
+            waterLogs = waterLogDao.getAllWaterLogsForBackup()
+        )
+        BackupScope.WEIGHT_HISTORY -> BackupPayload(
+            scope = scope,
+            weightLogs = weightLogDao.getAllWeightLogsForBackup()
+        )
+        BackupScope.ALL_DATA -> BackupPayload(
+            scope = scope,
+            foods = foodDao.getAllFoodsForBackup(),
+            foodLogs = foodLogDao.getAllLogsForBackup(),
+            waterLogs = waterLogDao.getAllWaterLogsForBackup(),
+            weightLogs = weightLogDao.getAllWeightLogsForBackup(),
+            goals = goalDao.getGoals() ?: NutritionGoalEntity(),
+            settings = getSettings()
+        )
+    }
+
+    /**
+     * Whether restoring [payload] would overwrite any data the user already
+     * has. Only the sections present in the payload are considered.
+     */
+    suspend fun hasExistingDataFor(payload: BackupPayload): Boolean {
+        if (payload.foods != null && foodDao.getFoodCount() > 0) return true
+        if (payload.foodLogs != null && foodLogDao.getLogCount() > 0) return true
+        if (payload.waterLogs != null && waterLogDao.getWaterLogCount() > 0) return true
+        if (payload.weightLogs != null && weightLogDao.getWeightLogCount() > 0) return true
+        if (payload.goals != null && goalDao.getGoals() != null) return true
+        if (payload.settings != null && appSettingsDao.getSettings() != null) return true
+        return false
+    }
+
+    /**
+     * Replaces the sections contained in [payload] with the imported data in a
+     * single transaction, so a failed import can never leave a partial restore.
+     */
+    suspend fun restoreBackupPayload(payload: BackupPayload) {
+        database.withTransaction {
+            payload.foods?.let { foods ->
+                foodDao.deleteAllFoods()
+                foodDao.insertAllFoods(foods)
+            }
+            payload.foodLogs?.let { logs ->
+                foodLogDao.deleteAllLogs()
+                foodLogDao.insertAllLogs(logs)
+            }
+            payload.waterLogs?.let { logs ->
+                waterLogDao.deleteAllWaterLogs()
+                waterLogDao.insertAllWaterLogs(logs)
+            }
+            payload.weightLogs?.let { logs ->
+                weightLogDao.deleteAllWeightLogs()
+                weightLogDao.insertAllWeightLogs(logs)
+            }
+            payload.goals?.let { goalDao.insertOrUpdateGoals(it) }
+            payload.settings?.let { appSettingsDao.insertOrUpdate(it) }
         }
     }
 

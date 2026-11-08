@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 data class AppSettingsEntity(
     @PrimaryKey
     val id: Int = 1,
-    val aiProvider: String = "GEMINI", // "GEMINI", "NVIDIA_NIM", "OPENAI", "LOCAL"
+    val aiProvider: String = "LOCAL", // "GEMINI", "NVIDIA_NIM", "OPENAI", "LOCAL"
     val geminiApiKey: String = "",
     val geminiModel: String = "gemini-3.6-flash",
     val nvidiaApiKey: String = "",

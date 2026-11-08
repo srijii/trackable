@@ -337,7 +337,7 @@ fun WeightProgressionChartCard(
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = "${if (diff > 0) "+" else ""}${String.format("%.1f", diff)} kg",
+                            text = "${if (diff > 0) "+" else ""}${String.format(java.util.Locale.US, "%.1f", diff)} kg",
                             color = if (isLoss) Color(0xFF10B981) else ClassicRed,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
@@ -465,11 +465,11 @@ fun WeightProgressionChartCard(
                     val firstDate = LocalDate.ofEpochDay(weightLogs.first().dateEpochDay).format(DateTimeFormatter.ofPattern("MMM d"))
                     val lastDate = LocalDate.ofEpochDay(weightLogs.last().dateEpochDay).format(DateTimeFormatter.ofPattern("MMM d"))
                     Text(
-                        text = "Start: $firstDate (${String.format("%.1f", weightLogs.first().weightKg)} kg)",
+                        text = "Start: $firstDate (${String.format(java.util.Locale.US, "%.1f", weightLogs.first().weightKg)} kg)",
                         style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 11.sp)
                     )
                     Text(
-                        text = "Latest: $lastDate (${String.format("%.1f", weightLogs.last().weightKg)} kg)",
+                        text = "Latest: $lastDate (${String.format(java.util.Locale.US, "%.1f", weightLogs.last().weightKg)} kg)",
                         style = MaterialTheme.typography.bodySmall.copy(color = ClassicRed, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                     )
                 }

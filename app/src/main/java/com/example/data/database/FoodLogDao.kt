@@ -39,4 +39,13 @@ interface FoodLogDao {
 
     @Query("SELECT * FROM food_logs WHERE id = :id LIMIT 1")
     suspend fun getLogById(id: Long): FoodLogEntity?
+
+    @Query("SELECT * FROM food_logs ORDER BY timestamp ASC")
+    suspend fun getAllLogsForBackup(): List<FoodLogEntity>
+
+    @Query("SELECT COUNT(*) FROM food_logs")
+    suspend fun getLogCount(): Int
+
+    @Query("DELETE FROM food_logs")
+    suspend fun deleteAllLogs()
 }

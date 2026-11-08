@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 data class SaveResult(
     val success: Boolean,
@@ -73,6 +74,8 @@ class SettingsViewModel(
         waterTarget: String,
         cupSize1Target: String,
         cupSize2Target: String,
+        nameText: String,
+        sexValue: String,
         weightText: String,
         targetWeightText: String,
         heightText: String,
@@ -108,6 +111,8 @@ class SettingsViewModel(
         if (waterTarget.toIntOrNull() ?: -1 != goals.waterGoalMl) return true
 
         // Check profile changes
+        if (nameText.trim() != goals.name) return true
+        if (sexValue != goals.sex) return true
         if (weightText.toDoubleOrNull() != goals.currentWeightKg) return true
         if (targetWeightText.toDoubleOrNull() != goals.targetWeightKg) return true
         if (heightText.toDoubleOrNull() != goals.heightCm) return true
@@ -128,8 +133,8 @@ class SettingsViewModel(
     }
 
     // Track selected AI provider and model for change detection
-    private var selectedAiProvider: String = "GEMINI"
-    private var selectedModelName: String = "gemini-3.8-flash"
+    private var selectedAiProvider: String = "LOCAL"
+    private var selectedModelName: String = "local-smart"
 
     fun setSelectedAiModel(provider: String, modelName: String) {
         selectedAiProvider = provider
@@ -172,7 +177,7 @@ class SettingsViewModel(
             else -> "maintenance"
         }
 
-        val bmr = when (sex.lowercase()) {
+        val bmr = when (sex.lowercase(Locale.ROOT)) {
             "male" -> 10.0 * weightW + 6.25 * heightH - 5.0 * ageA + 5.0
             "female" -> 10.0 * weightW + 6.25 * heightH - 5.0 * ageA - 161.0
             else -> 10.0 * weightW + 6.25 * heightH - 5.0 * ageA + 5.0

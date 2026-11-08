@@ -29,4 +29,16 @@ interface WaterLogDao {
 
     @Query("DELETE FROM water_logs WHERE id = :id")
     suspend fun deleteWaterLogById(id: Long)
+
+    @Query("SELECT * FROM water_logs ORDER BY timestamp ASC")
+    suspend fun getAllWaterLogsForBackup(): List<WaterLogEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllWaterLogs(logs: List<WaterLogEntity>)
+
+    @Query("SELECT COUNT(*) FROM water_logs")
+    suspend fun getWaterLogCount(): Int
+
+    @Query("DELETE FROM water_logs")
+    suspend fun deleteAllWaterLogs()
 }

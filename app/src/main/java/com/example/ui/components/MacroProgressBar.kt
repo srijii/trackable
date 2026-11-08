@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import com.example.ui.theme.SurfaceBorder
 import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.TextMuted
@@ -55,7 +56,7 @@ fun MacroTrackerCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("macro_card_${macroName.lowercase()}"),
+            .testTag("macro_card_${macroName.lowercase(Locale.ROOT)}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = SurfaceDark),
         border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))

@@ -42,4 +42,10 @@ interface FoodDao {
 
     @Query("SELECT COUNT(*) FROM foods")
     suspend fun getFoodCount(): Int
+
+    @Query("SELECT * FROM foods ORDER BY name ASC")
+    suspend fun getAllFoodsForBackup(): List<FoodEntity>
+
+    @Query("DELETE FROM foods")
+    suspend fun deleteAllFoods()
 }

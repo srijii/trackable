@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,8 +40,10 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +61,8 @@ import com.example.ai.NutritionAIServiceCoordinator
 import com.example.data.repository.NutritionRepository
 import com.example.ui.screens.analytics.AnalyticsScreen
 import com.example.ui.screens.analytics.AnalyticsViewModel
+import com.example.ui.screens.backup.BackupRestoreScreen
+import com.example.ui.screens.backup.BackupRestoreViewModel
 import com.example.ui.screens.dashboard.DashboardScreen
 import com.example.ui.screens.dashboard.DashboardViewModel
 import com.example.ui.screens.history.HistoryScreen
@@ -92,6 +97,9 @@ fun NutriTrackApp(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Dashboard.route
 
+    // Handler provided by SettingsScreen to guard navigation away when unsaved changes exist
+    var settingsNavigationHandler by remember { mutableStateOf<((() -> Unit) -> Unit)?>(null) }
+
     val onboardingViewModel = remember { OnboardingViewModel(repository) }
     val appSettingsState by repository.settingsFlow.collectAsState(initial = null)
 
@@ -103,6 +111,21 @@ fun NutriTrackApp(
         repository.initialize()
     }
 
+    // Wait until settings are loaded before deciding where to start, so an
+    // incomplete onboarding can never briefly land on the dashboard.
+    val loadedSettings = appSettingsState
+    if (loadedSettings == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundDark),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = ClassicRed)
+        }
+        return
+    }
+
     // Retain ViewModels across recompositions
     val dashboardViewModel = remember { DashboardViewModel(repository, aiCoordinator) }
     val inventoryViewModel = remember { InventoryViewModel(repository) }
@@ -110,14 +133,20 @@ fun NutriTrackApp(
     val analyticsViewModel = remember { AnalyticsViewModel(repository) }
     val historyViewModel = remember { HistoryViewModel(repository) }
     val settingsViewModel = remember { SettingsViewModel(repository) }
+    val backupRestoreViewModel = remember { BackupRestoreViewModel(repository) }
 
-    // Determine start destination: show dashboard if onboarded or still loading,
-    // show onboarding only if we know onboarding is not completed
-    val hasCompletedOnboarding = appSettingsState?.hasCompletedOnboarding == true
-    val startDestination = if (appSettingsState == null || hasCompletedOnboarding) {
+    // If onboarding hasn't been completed yet, always start there.
+    val startDestination = if (loadedSettings.hasCompletedOnboarding) {
         Screen.Dashboard.route
     } else {
         Screen.Onboarding.route
+    }
+
+    // The navigation drawer must never be usable during onboarding.
+    LaunchedEffect(currentRoute) {
+        if (currentRoute == Screen.Onboarding.route) {
+            drawerState.close()
+        }
     }
 
     // Intercept back button if drawer is open
@@ -128,18 +157,35 @@ fun NutriTrackApp(
     fun navigateTo(screen: Screen) {
         coroutineScope.launch { drawerState.close() }
         if (currentRoute != screen.route) {
-            navController.navigate(screen.route) {
-                popUpTo(Screen.Dashboard.route) {
-                    saveState = true
+            // If leaving Settings with unsaved changes, let the SettingsScreen guard
+            // the navigation (shows Save / Discard changes dialog).
+            if (currentRoute == Screen.Settings.route && settingsNavigationHandler != null) {
+                settingsNavigationHandler?.let { handler ->
+                    handler {
+                        navController.navigate(screen.route) {
+                            popUpTo(Screen.Dashboard.route) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
                 }
-                launchSingleTop = true
-                restoreState = true
+            } else {
+                navController.navigate(screen.route) {
+                    popUpTo(Screen.Dashboard.route) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
             }
         }
     }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = currentRoute != Screen.Onboarding.route,
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = Color(0xFF14161B),
@@ -289,6 +335,46 @@ fun NutriTrackApp(
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
 
+                    // Backup & Restore sits next to Settings at the very bottom
+                    val isBackupSelected = currentRoute == Screen.BackupRestore.route
+                    NavigationDrawerItem(
+                        label = {
+                            Column {
+                                Text(
+                                    text = "Backup & Restore",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = if (isBackupSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isBackupSelected) Color.White else TextSecondary
+                                    )
+                                )
+                                Text(
+                                    text = "Export & import your data",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = TextMuted,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = Screen.BackupRestore.icon,
+                                contentDescription = "Backup & Restore",
+                                tint = if (isBackupSelected) ClassicRed else TextMuted
+                            )
+                        },
+                        selected = isBackupSelected,
+                        onClick = { navigateTo(Screen.BackupRestore) },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = Color(0xFF222630),
+                            unselectedContainerColor = Color.Transparent
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .padding(vertical = 4.dp)
+                            .testTag("drawer_item_backup_restore")
+                    )
+
                     // Settings at the most bottom
                     val isSettingsSelected = currentRoute == Screen.Settings.route
                     NavigationDrawerItem(
@@ -348,6 +434,7 @@ fun NutriTrackApp(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(innerPadding)
             ) {
                 NavHost(
                     navController = navController,
@@ -434,6 +521,20 @@ fun NutriTrackApp(
                             )
                         }
                     }
+                    composable(Screen.BackupRestore.route) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            PageHeader(
+                                title = "Backup & Restore",
+                                onMenuClick = {
+                                    coroutineScope.launch { drawerState.open() }
+                                }
+                            )
+                            BackupRestoreScreen(
+                                viewModel = backupRestoreViewModel,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                     composable(Screen.Settings.route) {
                         Column(modifier = Modifier.fillMaxSize()) {
                             PageHeader(
@@ -452,6 +553,9 @@ fun NutriTrackApp(
                                         launchSingleTop = true
                                         restoreState = true
                                     }
+                                },
+                                setNavigationHandler = { handler ->
+                                    settingsNavigationHandler = handler
                                 },
                                 modifier = Modifier.weight(1f)
                             )

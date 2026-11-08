@@ -30,4 +30,16 @@ interface WeightLogDao {
 
     @Query("DELETE FROM weight_logs WHERE id = :id")
     suspend fun deleteWeightLogById(id: Long)
+
+    @Query("SELECT * FROM weight_logs ORDER BY dateEpochDay ASC")
+    suspend fun getAllWeightLogsForBackup(): List<WeightLogEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllWeightLogs(logs: List<WeightLogEntity>)
+
+    @Query("SELECT COUNT(*) FROM weight_logs")
+    suspend fun getWeightLogCount(): Int
+
+    @Query("DELETE FROM weight_logs")
+    suspend fun deleteAllWeightLogs()
 }

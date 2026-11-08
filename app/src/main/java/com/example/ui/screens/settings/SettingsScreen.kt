@@ -72,8 +72,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -145,6 +149,7 @@ val AVAILABLE_AI_MODELS = listOf(
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     onSaveComplete: () -> Unit = {},
+    setNavigationHandler: (((() -> Unit) -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val currentGoals by viewModel.goals.collectAsStateWithLifecycle()
@@ -173,7 +178,7 @@ fun SettingsScreen(
             "OPENAI" -> AVAILABLE_AI_MODELS.find { it.provider == "OPENAI" && it.modelName == appSettings.openaiModel }
                 ?: AVAILABLE_AI_MODELS.find { it.provider == "OPENAI" } ?: AVAILABLE_AI_MODELS[0]
             "LOCAL" -> AVAILABLE_AI_MODELS.find { it.provider == "LOCAL" } ?: AVAILABLE_AI_MODELS[0]
-            else -> AVAILABLE_AI_MODELS[0]
+            else -> AVAILABLE_AI_MODELS.find { it.provider == "LOCAL" } ?: AVAILABLE_AI_MODELS[0]
         }
     }
 
@@ -202,20 +207,24 @@ fun SettingsScreen(
     var cupSize2Target by remember(appSettings) { mutableStateOf("${appSettings.cupSize2Ml}") }
 
     // Profile
+    var nameText by remember(goals) { mutableStateOf(goals.name) }
+    var sexValue by remember(goals) { mutableStateOf(goals.sex) }
     var weightText by remember(goals) { mutableStateOf(goals.currentWeightKg?.toString() ?: "") }
     var targetWeightText by remember(goals) { mutableStateOf(goals.targetWeightKg?.toString() ?: "") }
     var heightText by remember(goals) { mutableStateOf(goals.heightCm?.toString() ?: "") }
     var ageText by remember(goals) { mutableStateOf(goals.age?.toString() ?: "") }
     var activityLevel by remember(goals) { mutableStateOf(goals.activityLevel) }
 
+    var activityMenuExpanded by remember { mutableStateOf(false) }
+    var sexMenuExpanded by remember { mutableStateOf(false) }
+    val activityLevels = listOf("Sedentary", "Lightly Active", "Moderately Active", "Very Active", "Extra Active")
+    val sexOptions = listOf("Male", "Female")
+
     // Start date
     var useStartDateLocal by remember(appSettings) { mutableStateOf(appSettings.useStartDate) }
     var startDateLocal by remember(appSettings) { mutableStateOf(appSettings.startDate) }
     var blockBeforeStartLocal by remember(appSettings) { mutableStateOf(appSettings.blockBeforeStartDate) }
     var blockAfterTodayLocal by remember(appSettings) { mutableStateOf(appSettings.blockAfterToday) }
-
-    var activityMenuExpanded by remember { mutableStateOf(false) }
-    val activityLevels = listOf("Sedentary", "Light", "Moderate", "Very Active", "Extra Active")
 
     // Track selected AI model
     LaunchedEffect(selectedModelOption) {
@@ -229,18 +238,69 @@ fun SettingsScreen(
         geminiApiKey, nvidiaApiKey, openaiApiKey, nvidiaBaseUrl,
         calTarget, proteinTarget, carbsTarget, fatTarget, waterTarget,
         cupSize1Target, cupSize2Target,
-        weightText, targetWeightText, heightText, ageText, activityLevel,
+        nameText, sexValue, weightText, targetWeightText, heightText, ageText, activityLevel,
         useStartDateLocal, startDateLocal, blockBeforeStartLocal, blockAfterTodayLocal
     ) {
-        if (viewModel.hasUnsavedChanges(
+        hasUnsavedChanges = viewModel.hasUnsavedChanges(
             currentGoals, currentAppSettings,
             geminiApiKey, nvidiaApiKey, openaiApiKey, nvidiaBaseUrl,
             calTarget, proteinTarget, carbsTarget, fatTarget, waterTarget,
             cupSize1Target, cupSize2Target,
-            weightText, targetWeightText, heightText, ageText, activityLevel,
+            nameText, sexValue, weightText, targetWeightText, heightText, ageText, activityLevel,
             useStartDateLocal, startDateLocal, blockBeforeStartLocal, blockAfterTodayLocal
-        )) {
-            hasUnsavedChanges = true
+        )
+    }
+
+    // Discard all local changes back to the original saved values
+    fun discardChanges() {
+        geminiApiKey = appSettings.geminiApiKey.trim()
+        nvidiaApiKey = appSettings.nvidiaApiKey.trim()
+        nvidiaBaseUrl = appSettings.nvidiaBaseUrl.trim()
+        openaiApiKey = appSettings.openaiApiKey.trim()
+
+        calTarget = "${goals.caloriesGoal.toInt()}"
+        proteinTarget = "${goals.proteinGoal.toInt()}"
+        carbsTarget = "${goals.carbsGoal.toInt()}"
+        fatTarget = "${goals.fatGoal.toInt()}"
+        waterTarget = "${goals.waterGoalMl}"
+
+        cupSize1Target = "${appSettings.cupSize1Ml}"
+        cupSize2Target = "${appSettings.cupSize2Ml}"
+
+        weightText = goals.currentWeightKg?.toString() ?: ""
+        targetWeightText = goals.targetWeightKg?.toString() ?: ""
+        heightText = goals.heightCm?.toString() ?: ""
+        ageText = goals.age?.toString() ?: ""
+        activityLevel = goals.activityLevel
+        nameText = goals.name
+        sexValue = goals.sex
+
+        useStartDateLocal = appSettings.useStartDate
+        startDateLocal = appSettings.startDate
+        blockBeforeStartLocal = appSettings.blockBeforeStartDate
+        blockAfterTodayLocal = appSettings.blockAfterToday
+
+        selectedModelOption = initialModelOption
+        hasUnsavedChanges = false
+    }
+
+    // The proceed lambda to call after the unsaved-dialog Save/Discard action
+    var pendingProceed by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var showUnsavedDialog by remember { mutableStateOf(false) }
+
+    // Register a navigation-away handler with the NavHost. When the user tries to
+    // leave the Settings page (e.g. via the drawer) while there are unsaved changes,
+    // the NavHost calls this handler instead of navigating directly.
+    LaunchedEffect(Unit) {
+        setNavigationHandler?.let { setHandler ->
+            setHandler { proceed ->
+                if (hasUnsavedChanges) {
+                    pendingProceed = proceed
+                    showUnsavedDialog = true
+                } else {
+                    proceed()
+                }
+            }
         }
     }
 
@@ -258,18 +318,20 @@ fun SettingsScreen(
         }
     }
 
-    var showUnsavedDialog by remember { mutableStateOf(false) }
-
     // Handle save result - navigate to dashboard on success
     LaunchedEffect(saveResult) {
         saveResult?.let { result ->
             if (result.success && result.navigateToDashboard) {
                 viewModel.clearSaveResult()
-                onSaveComplete()
+                val proceed = pendingProceed
+                pendingProceed = null
+                if (proceed != null) proceed() else onSaveComplete()
             } else if (result.success) {
                 viewModel.clearSaveResult()
                 hasUnsavedChanges = false
                 viewModel.clearMessage()
+            } else {
+                pendingProceed = null
             }
         }
     }
@@ -725,7 +787,7 @@ fun SettingsScreen(
                                     val heightCm = heightText.toDoubleOrNull()
                                     val result = viewModel.calculateNutrition(
                                         age = age,
-                                        sex = goals.sex ?: "",
+                                        sex = sexValue,
                                         currentWeightKg = weightKg,
                                         targetWeightKg = targetWeightKg,
                                         heightCm = heightCm,
@@ -1042,6 +1104,15 @@ fun SettingsScreen(
                             )
                         }
 
+                        OutlinedTextField(
+                            value = nameText,
+                            onValueChange = { nameText = it },
+                            label = { Text("Full Name") },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = customTextFieldColors(),
+                            singleLine = true
+                        )
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1092,6 +1163,43 @@ fun SettingsScreen(
 
                         Box {
                             OutlinedButton(
+                                onClick = { sexMenuExpanded = true },
+                                modifier = Modifier.fillMaxWidth().height(54.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Biological Sex:", color = TextSecondary)
+                                    Text(
+                                        sexValue.ifBlank { "Not set" },
+                                        color = PrimaryGreen,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = sexMenuExpanded,
+                                onDismissRequest = { sexMenuExpanded = false },
+                                modifier = Modifier.background(SurfaceDark)
+                            ) {
+                                sexOptions.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option, color = TextPrimary) },
+                                        onClick = {
+                                            sexValue = option
+                                            sexMenuExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Box {
+                            OutlinedButton(
                                 onClick = { activityMenuExpanded = true },
                                 modifier = Modifier.fillMaxWidth().height(54.dp),
                                 shape = RoundedCornerShape(12.dp)
@@ -1136,24 +1244,54 @@ fun SettingsScreen(
                 ) {
                     Button(
                         onClick = {
+                            val cal = calTarget.toDoubleOrNull() ?: 2200.0
+                            val prot = proteinTarget.toDoubleOrNull() ?: 140.0
+                            val carbs = carbsTarget.toDoubleOrNull() ?: 220.0
+                            val fat = fatTarget.toDoubleOrNull() ?: 65.0
+                            val water = waterTarget.toIntOrNull() ?: 3000
+                            val cup1 = cupSize1Target.toIntOrNull() ?: 250
+                            val cup2 = cupSize2Target.toIntOrNull() ?: 500
+
+                            val updatedGoals = goals.copy(
+                                name = nameText.trim(),
+                                caloriesGoal = cal,
+                                proteinGoal = prot,
+                                carbsGoal = carbs,
+                                fatGoal = fat,
+                                waterGoalMl = water,
+                                currentWeightKg = weightText.toDoubleOrNull(),
+                                targetWeightKg = targetWeightText.toDoubleOrNull(),
+                                heightCm = heightText.toDoubleOrNull(),
+                                age = ageText.toIntOrNull(),
+                                activityLevel = activityLevel,
+                                sex = sexValue
+                            )
+
                             val updatedSettings = appSettings.copy(
                                 aiProvider = selectedModelOption.provider,
-                                geminiApiKey = geminiApiKey.trim(),
-                                geminiModel = selectedModelOption.modelName,
-                                nvidiaApiKey = appSettings.nvidiaApiKey,
-                                nvidiaModel = appSettings.nvidiaModel,
-                                nvidiaBaseUrl = appSettings.nvidiaBaseUrl,
-                                openaiApiKey = appSettings.openaiApiKey,
-                                openaiModel = appSettings.openaiModel
+                                geminiApiKey = if (selectedModelOption.provider == "GEMINI") geminiApiKey.trim() else appSettings.geminiApiKey,
+                                geminiModel = if (selectedModelOption.provider == "GEMINI") selectedModelOption.modelName else appSettings.geminiModel,
+                                nvidiaApiKey = if (selectedModelOption.provider == "NVIDIA_NIM") nvidiaApiKey.trim() else appSettings.nvidiaApiKey,
+                                nvidiaModel = if (selectedModelOption.provider == "NVIDIA_NIM") selectedModelOption.modelName else appSettings.nvidiaModel,
+                                nvidiaBaseUrl = if (selectedModelOption.provider == "NVIDIA_NIM") nvidiaBaseUrl.trim().ifBlank { "https://integrate.api.nvidia.com/v1" } else appSettings.nvidiaBaseUrl,
+                                openaiApiKey = if (selectedModelOption.provider == "OPENAI") openaiApiKey.trim() else appSettings.openaiApiKey,
+                                openaiModel = if (selectedModelOption.provider == "OPENAI") selectedModelOption.modelName else appSettings.openaiModel,
+                                cupSize1Ml = cup1,
+                                cupSize2Ml = cup2,
+                                useStartDate = useStartDateLocal,
+                                startDate = if (useStartDateLocal && startDateLocal != null) startDateLocal else null,
+                                blockBeforeStartDate = blockBeforeStartLocal,
+                                blockAfterToday = blockAfterTodayLocal
                             )
-                            viewModel.saveApiSettings(updatedSettings)
+
+                            viewModel.saveGeneralSettings(updatedGoals, updatedSettings)
                         },
                         modifier = Modifier
                             .weight(1f)
                             .height(52.dp)
-                            .testTag("save_api_button"),
+                            .testTag("save_button"),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = ProgressCyanBlue,
+                            containerColor = PrimaryGreen,
                             contentColor = Color.White
                         ),
                         shape = RoundedCornerShape(14.dp)
@@ -1175,10 +1313,10 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Save API",
+                                    text = "Save All",
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.titleSmall
                                 )
@@ -1186,64 +1324,24 @@ fun SettingsScreen(
                         }
                     }
 
-                    Button(
+                    TextButton(
                         onClick = {
-                            val cal = calTarget.toDoubleOrNull() ?: 2200.0
-                            val prot = proteinTarget.toDoubleOrNull() ?: 140.0
-                            val carbs = carbsTarget.toDoubleOrNull() ?: 220.0
-                            val fat = fatTarget.toDoubleOrNull() ?: 65.0
-                            val water = waterTarget.toIntOrNull() ?: 3000
-                            val cup1 = cupSize1Target.toIntOrNull() ?: 250
-                            val cup2 = cupSize2Target.toIntOrNull() ?: 500
-
-                            val updatedGoals = goals.copy(
-                                caloriesGoal = cal,
-                                proteinGoal = prot,
-                                carbsGoal = carbs,
-                                fatGoal = fat,
-                                waterGoalMl = water,
-                                currentWeightKg = weightText.toDoubleOrNull(),
-                                targetWeightKg = targetWeightText.toDoubleOrNull(),
-                                heightCm = heightText.toDoubleOrNull(),
-                                age = ageText.toIntOrNull(),
-                                activityLevel = activityLevel,
-                                sex = goals.sex
-                            )
-
-                            val updatedSettings = appSettings.copy(
-                                cupSize1Ml = cup1,
-                                cupSize2Ml = cup2,
-                                useStartDate = useStartDateLocal,
-                                startDate = if (useStartDateLocal && startDateLocal != null) startDateLocal else null,
-                                blockBeforeStartDate = blockBeforeStartLocal,
-                                blockAfterToday = blockAfterTodayLocal
-                            )
-
-                            viewModel.saveGeneralSettings(updatedGoals, updatedSettings)
+                            showUnsavedDialog = false
+                            discardChanges()
                         },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp)
-                            .testTag("save_general_button"),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryGreen,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(14.dp)
+                        modifier = Modifier.height(52.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Save General",
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) {
+                                    append("Discard changes")
+                                }
+                            },
+                            style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleSmall
+                                color = TextMuted
                             )
-                        }
+                        )
                     }
                 }
             }
@@ -1294,32 +1392,86 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = {
                 showUnsavedDialog = false
+                pendingProceed = null
             },
             title = { Text("Unsaved Changes", color = TextPrimary) },
             text = {
-                Text("You have unsaved changes. Do you want to keep them or revert?", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                Text("You have unsaved changes. Save them before leaving?", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
             },
             confirmButton = {
                 Button(
                     onClick = {
                         showUnsavedDialog = false
-                        // Navigate away (keep changes)
-                        onSaveComplete()
+                        // Keep pendingProceed so the saveResult handler can navigate
+                        // to the page the user originally requested.
+                        // Save all settings, then the saveResult flow navigates
+                        val cal = calTarget.toDoubleOrNull() ?: 2200.0
+                        val prot = proteinTarget.toDoubleOrNull() ?: 140.0
+                        val carbs = carbsTarget.toDoubleOrNull() ?: 220.0
+                        val fat = fatTarget.toDoubleOrNull() ?: 65.0
+                        val water = waterTarget.toIntOrNull() ?: 3000
+                        val cup1 = cupSize1Target.toIntOrNull() ?: 250
+                        val cup2 = cupSize2Target.toIntOrNull() ?: 500
+
+                        val updatedGoals = goals.copy(
+                            name = nameText.trim(),
+                            caloriesGoal = cal,
+                            proteinGoal = prot,
+                            carbsGoal = carbs,
+                            fatGoal = fat,
+                            waterGoalMl = water,
+                            currentWeightKg = weightText.toDoubleOrNull(),
+                            targetWeightKg = targetWeightText.toDoubleOrNull(),
+                            heightCm = heightText.toDoubleOrNull(),
+                            age = ageText.toIntOrNull(),
+                            activityLevel = activityLevel,
+                            sex = sexValue
+                        )
+
+                        val updatedSettings = appSettings.copy(
+                            aiProvider = selectedModelOption.provider,
+                            geminiApiKey = if (selectedModelOption.provider == "GEMINI") geminiApiKey.trim() else appSettings.geminiApiKey,
+                            geminiModel = if (selectedModelOption.provider == "GEMINI") selectedModelOption.modelName else appSettings.geminiModel,
+                            nvidiaApiKey = if (selectedModelOption.provider == "NVIDIA_NIM") nvidiaApiKey.trim() else appSettings.nvidiaApiKey,
+                            nvidiaModel = if (selectedModelOption.provider == "NVIDIA_NIM") selectedModelOption.modelName else appSettings.nvidiaModel,
+                            nvidiaBaseUrl = if (selectedModelOption.provider == "NVIDIA_NIM") nvidiaBaseUrl.trim().ifBlank { "https://integrate.api.nvidia.com/v1" } else appSettings.nvidiaBaseUrl,
+                            openaiApiKey = if (selectedModelOption.provider == "OPENAI") openaiApiKey.trim() else appSettings.openaiApiKey,
+                            openaiModel = if (selectedModelOption.provider == "OPENAI") selectedModelOption.modelName else appSettings.openaiModel,
+                            cupSize1Ml = cup1,
+                            cupSize2Ml = cup2,
+                            useStartDate = useStartDateLocal,
+                            startDate = if (useStartDateLocal && startDateLocal != null) startDateLocal else null,
+                            blockBeforeStartDate = blockBeforeStartLocal,
+                            blockAfterToday = blockAfterTodayLocal
+                        )
+
+                        viewModel.saveGeneralSettings(updatedGoals, updatedSettings)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen, contentColor = Color.White),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("Keep Changes", fontWeight = FontWeight.Bold)
+                    Text("Save", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showUnsavedDialog = false
-                    hasUnsavedChanges = false
-                    // Navigate away (revert changes)
-                    onSaveComplete()
+                    val proceed = pendingProceed
+                    pendingProceed = null
+                    discardChanges()
+                    proceed?.invoke()
                 }) {
-                    Text("Revert", color = TextMuted)
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) {
+                                append("Discard changes")
+                            }
+                        },
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = TextMuted
+                        )
+                    )
                 }
             },
             containerColor = SurfaceDark
