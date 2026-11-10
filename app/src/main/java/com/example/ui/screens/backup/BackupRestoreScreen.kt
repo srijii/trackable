@@ -3,7 +3,7 @@ package com.example.ui.screens.backup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,25 +17,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.Kitchen
-import androidx.compose.material.icons.filled.Scale
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -43,21 +42,22 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.backup.BackupPayload
-import com.example.data.backup.BackupScope
+import com.example.ui.components.SectionHeader
+import com.example.ui.components.TrackableDivider
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.ClassicRed
 import com.example.ui.theme.ErrorRed
@@ -79,6 +79,13 @@ fun BackupRestoreScreen(
     val message by viewModel.message.collectAsStateWithLifecycle()
     val pendingImport by viewModel.pendingImport.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Export selection. "All app data" is a superset: picking it selects and
+    // locks the other sections.
+    var exportInventory by remember { mutableStateOf(true) }
+    var exportDiet by remember { mutableStateOf(true) }
+    var exportWeight by remember { mutableStateOf(false) }
+    var exportAll by remember { mutableStateOf(false) }
 
     val createDocumentLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -105,6 +112,8 @@ fun BackupRestoreScreen(
         }
     }
 
+    val anythingSelected = exportAll || exportInventory || exportDiet || exportWeight
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -113,224 +122,124 @@ fun BackupRestoreScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 32.dp)
         ) {
             item {
                 Text(
-                    text = "YOUR DATA, YOUR CONTROL",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = ClassicRed,
-                        letterSpacing = 1.2.sp
-                    )
-                )
-                Text(
-                    text = "Backup & Restore",
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.Black,
-                        color = TextPrimary
-                    ),
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-                Text(
-                    text = "Export your data as a JSON file you can keep anywhere, then import it later to restore everything.",
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted),
-                    modifier = Modifier.padding(top = 6.dp)
+                    text = "Export your data as a JSON file, or restore from a backup you saved earlier.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
                 )
             }
 
             if (isBusy) {
                 item {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         CircularProgressIndicator(
                             color = ClassicRed,
                             strokeWidth = 2.dp,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text("Working…", color = TextMuted, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-
-            item {
-                Text(
-                    text = "EXPORT",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextMuted,
-                        letterSpacing = 1.2.sp,
-                        fontSize = 10.sp
-                    ),
-                    modifier = Modifier.padding(start = 4.dp, top = 4.dp)
-                )
-            }
-
-            item {
-                ExportCard(
-                    title = "Inventory & Diet",
-                    description = "All inventory foods, every meal log, and your water intake history.",
-                    icon = Icons.Default.Kitchen,
-                    enabled = !isBusy,
-                    modifier = Modifier.testTag("backup_export_inventory"),
-                    onExport = {
-                        viewModel.prepareExport(BackupScope.INVENTORY_DIET) { fileName ->
-                            createDocumentLauncher.launch(fileName)
-                        }
-                    }
-                )
-            }
-
-            item {
-                ExportCard(
-                    title = "Weight History",
-                    description = "Every logged weigh-in, with its date and note.",
-                    icon = Icons.Default.Scale,
-                    enabled = !isBusy,
-                    modifier = Modifier.testTag("backup_export_weight"),
-                    onExport = {
-                        viewModel.prepareExport(BackupScope.WEIGHT_HISTORY) { fileName ->
-                            createDocumentLauncher.launch(fileName)
-                        }
-                    }
-                )
-            }
-
-            item {
-                ExportCard(
-                    title = "All App Data",
-                    description = "Everything above, plus your profile, personal details, goals, and app settings.",
-                    icon = Icons.Default.Storage,
-                    enabled = !isBusy,
-                    modifier = Modifier.testTag("backup_export_all"),
-                    onExport = {
-                        viewModel.prepareExport(BackupScope.ALL_DATA) { fileName ->
-                            createDocumentLauncher.launch(fileName)
-                        }
-                    }
-                )
-            }
-
-            item {
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF261810)),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Color(0xFF452A18))),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = WarningAmber,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "All App Data includes your saved API keys and personal details. Keep the exported file somewhere private.",
-                            style = MaterialTheme.typography.bodySmall.copy(color = WarningAmber)
+                            text = "Working…",
+                            color = TextMuted,
+                            style = MaterialTheme.typography.labelMedium
                         )
                     }
                 }
             }
 
             item {
-                Text(
-                    text = "IMPORT",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextMuted,
-                        letterSpacing = 1.2.sp,
-                        fontSize = 10.sp
-                    ),
-                    modifier = Modifier.padding(start = 4.dp, top = 10.dp)
+                SectionHeader(
+                    title = "Export",
+                    supportingText = "Choose what to include in the file.",
+                    modifier = Modifier.padding(top = 24.dp, bottom = 4.dp)
                 )
             }
 
             item {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(SurfaceBorder)),
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ExportOptionRow(
+                        label = "Inventory",
+                        description = "Every food you have saved",
+                        checked = exportInventory,
+                        enabled = !exportAll,
+                        modifier = Modifier.testTag("backup_export_inventory"),
+                        onCheckedChange = { exportInventory = it }
+                    )
+                    ExportOptionRow(
+                        label = "Diet history",
+                        description = "Meal logs and water intake",
+                        checked = exportDiet,
+                        enabled = !exportAll,
+                        modifier = Modifier.testTag("backup_export_diet"),
+                        onCheckedChange = { exportDiet = it }
+                    )
+                    ExportOptionRow(
+                        label = "Weight history",
+                        description = "All recorded weigh-ins",
+                        checked = exportWeight,
+                        enabled = !exportAll,
+                        modifier = Modifier.testTag("backup_export_weight"),
+                        onCheckedChange = { exportWeight = it }
+                    )
+                    ExportOptionRow(
+                        label = "All app data",
+                        description = "Everything above, plus profile, goals and settings",
+                        checked = exportAll,
+                        enabled = true,
+                        modifier = Modifier.testTag("backup_export_all"),
+                        onCheckedChange = { checked ->
+                            exportAll = checked
+                            if (checked) {
+                                exportInventory = true
+                                exportDiet = true
+                                exportWeight = true
+                            }
+                        }
+                    )
+                }
+            }
+
+            item {
+                Button(
+                    onClick = {
+                        viewModel.prepareExport(
+                            includeInventory = exportInventory,
+                            includeDiet = exportDiet,
+                            includeWeightHistory = exportWeight,
+                            includeAllAppData = exportAll
+                        ) { fileName ->
+                            createDocumentLauncher.launch(fileName)
+                        }
+                    },
+                    enabled = anythingSelected && !isBusy,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("backup_import_card")
+                        .height(48.dp)
+                        .padding(top = 4.dp)
+                        .testTag("backup_export_button"),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ClassicRed,
+                        contentColor = Color.White,
+                        disabledContainerColor = SurfaceCardHigh,
+                        disabledContentColor = TextMuted
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(SurfaceCardHigh),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.FileUpload,
-                                    contentDescription = null,
-                                    tint = ClassicRed,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Restore from a backup",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
-                                    )
-                                )
-                                Text(
-                                    text = "Choose a JSON backup file. If it contains data you already have, you'll be asked before anything is replaced.",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted)
-                                )
-                            }
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                openDocumentLauncher.launch(
-                                    arrayOf(
-                                        "application/json",
-                                        "application/octet-stream",
-                                        "text/plain"
-                                    )
-                                )
-                            },
-                            enabled = !isBusy,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(46.dp)
-                                .testTag("backup_import_button"),
-                            shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, ClassicRed)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FileUpload,
-                                contentDescription = null,
-                                tint = ClassicRed,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Choose backup file",
-                                color = ClassicRed,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.Default.FileDownload,
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Export backup", style = MaterialTheme.typography.titleSmall)
                 }
             }
 
@@ -338,20 +247,105 @@ fun BackupRestoreScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 14.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = WarningAmber,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "All app data includes your saved API keys and personal details. Keep the file somewhere private.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WarningAmber.copy(alpha = 0.9f)
+                    )
+                }
+                TrackableDivider()
+            }
+
+            item {
+                SectionHeader(
+                    title = "Import",
+                    supportingText = "Restore inventory, logs, weight history or everything.",
+                    modifier = Modifier.padding(top = 24.dp, bottom = 4.dp)
+                )
+            }
+
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("backup_import_card")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable(enabled = !isBusy) {
+                                openDocumentLauncher.launch(
+                                    arrayOf(
+                                        "application/json",
+                                        "application/octet-stream",
+                                        "text/plain"
+                                    )
+                                )
+                            }
+                            .padding(vertical = 12.dp)
+                            .testTag("backup_import_button"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FileUpload,
+                            contentDescription = null,
+                            tint = ClassicRed,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Choose a backup file",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "You will see what it contains before restoring.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Browse",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = ClassicRed
+                        )
+                    }
+                    TrackableDivider()
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 24.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = null,
-                        tint = TextMuted.copy(alpha = 0.6f),
-                        modifier = Modifier.size(14.dp)
+                        tint = TextMuted.copy(alpha = 0.55f),
+                        modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Backups stay on your device unless you share them.",
-                        style = MaterialTheme.typography.labelSmall.copy(color = TextMuted.copy(alpha = 0.7f))
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted.copy(alpha = 0.7f)
                     )
                 }
             }
@@ -383,146 +377,232 @@ fun BackupRestoreScreen(
     }
 
     pendingImport?.let { payload ->
-        ReplaceDataDialog(
+        ImportSelectionDialog(
             payload = payload,
-            onConfirm = viewModel::confirmImport,
+            onConfirm = { selection -> viewModel.confirmImport(selection) },
             onDismiss = viewModel::cancelImport
         )
     }
 }
 
+/** One export option: a checkbox with a label and a quiet explanation. */
 @Composable
-private fun ExportCard(
-    title: String,
+private fun ExportOptionRow(
+    label: String,
     description: String,
-    icon: ImageVector,
+    checked: Boolean,
     enabled: Boolean,
-    onExport: () -> Unit,
+    onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-        border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(SurfaceBorder)),
-        modifier = modifier.fillMaxWidth()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(SurfaceCardHigh),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = ClassicRed,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    )
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextMuted)
-                    )
-                }
-            }
-
-            Button(
-                onClick = onExport,
-                enabled = enabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ClassicRed,
-                    contentColor = Color.White
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.FileDownload,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Export as JSON",
-                    fontWeight = FontWeight.Bold
-                )
-            }
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            colors = CheckboxDefaults.colors(
+                checkedColor = ClassicRed,
+                uncheckedColor = SurfaceBorder,
+                disabledCheckedColor = SurfaceBorder,
+                disabledUncheckedColor = SurfaceBorder.copy(alpha = 0.5f)
+            )
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (enabled) TextPrimary else TextMuted
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted
+            )
         }
     }
 }
 
+/**
+ * After a backup file is chosen, the user sees exactly how much data it holds
+ * and picks the parts they want to restore.
+ */
 @Composable
-private fun ReplaceDataDialog(
+private fun ImportSelectionDialog(
     payload: BackupPayload,
-    onConfirm: () -> Unit,
+    onConfirm: (RestoreSelection) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var inventory by remember(payload) { mutableStateOf(payload.foods != null) }
+    var diet by remember(payload) { mutableStateOf(payload.foodLogs != null || payload.waterLogs != null) }
+    var weight by remember(payload) { mutableStateOf(payload.weightLogs != null) }
+    var profile by remember(payload) { mutableStateOf(payload.goals != null) }
+    var settings by remember(payload) { mutableStateOf(payload.settings != null) }
+
+    val foodCount = payload.foods?.size ?: 0
+    val mealCount = payload.foodLogs?.size ?: 0
+    val waterCount = payload.waterLogs?.size ?: 0
+    val weightCount = payload.weightLogs?.size ?: 0
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Replace current data?", color = TextPrimary) },
+        containerColor = SurfaceDark,
+        title = {
+            Text(
+                text = "Restore backup",
+                style = MaterialTheme.typography.headlineSmall,
+                color = TextPrimary
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text(
-                    text = "This backup contains:",
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                    text = "This file contains:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
                 )
-                payload.contentSummary().forEach { line ->
-                    Row(verticalAlignment = Alignment.Top) {
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 6.dp)
-                                .size(4.dp)
-                                .clip(CircleShape)
-                                .background(ClassicRed)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = line,
-                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                        )
-                    }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                if (payload.foods != null) {
+                    ImportOptionRow(
+                        label = "Inventory",
+                        detail = "$foodCount food${if (foodCount == 1) "" else "s"}",
+                        checked = inventory,
+                        onCheckedChange = { inventory = it }
+                    )
                 }
-                Text(
-                    text = "The matching data already in the app will be replaced by this backup. This can't be undone.",
-                    style = MaterialTheme.typography.bodySmall.copy(color = WarningAmber),
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                if (payload.foodLogs != null || payload.waterLogs != null) {
+                    ImportOptionRow(
+                        label = "Diet history",
+                        detail = "$mealCount meal${if (mealCount == 1) "" else "s"} · $waterCount water entr${if (waterCount == 1) "y" else "ies"}",
+                        checked = diet,
+                        onCheckedChange = { diet = it }
+                    )
+                }
+                if (payload.weightLogs != null) {
+                    ImportOptionRow(
+                        label = "Weight history",
+                        detail = "$weightCount entr${if (weightCount == 1) "y" else "ies"}",
+                        checked = weight,
+                        onCheckedChange = { weight = it }
+                    )
+                }
+                if (payload.goals != null) {
+                    ImportOptionRow(
+                        label = "Profile & goals",
+                        detail = "Personal details and targets",
+                        checked = profile,
+                        onCheckedChange = { profile = it }
+                    )
+                }
+                if (payload.settings != null) {
+                    ImportOptionRow(
+                        label = "App settings",
+                        detail = "Includes saved API keys",
+                        checked = settings,
+                        onCheckedChange = { settings = it }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = WarningAmber,
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Selected data will replace what the app already has. This can't be undone.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WarningAmber
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = onConfirm,
+                onClick = {
+                    onConfirm(
+                        RestoreSelection(
+                            inventory = inventory,
+                            diet = diet,
+                            weightHistory = weight,
+                            profile = profile,
+                            settings = settings
+                        )
+                    )
+                },
+                enabled = inventory || diet || weight || profile || settings,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ClassicRed,
-                    contentColor = Color.White
+                    contentColor = Color.White,
+                    disabledContainerColor = SurfaceCardHigh,
+                    disabledContentColor = TextMuted
                 ),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Replace", fontWeight = FontWeight.Bold)
+                Text("Import selected", fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cancel", color = TextMuted)
             }
-        },
-        containerColor = SurfaceDark
+        }
     )
+}
+
+@Composable
+private fun ImportOptionRow(
+    label: String,
+    detail: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = CheckboxDefaults.colors(
+                checkedColor = ClassicRed,
+                uncheckedColor = SurfaceBorder
+            )
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = TextPrimary
+            )
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted
+            )
+        }
+    }
 }

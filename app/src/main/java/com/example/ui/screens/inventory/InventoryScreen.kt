@@ -1,7 +1,8 @@
 package com.example.ui.screens.inventory
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -10,9 +11,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,17 +28,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -67,11 +71,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.database.FoodEntity
+import com.example.ui.components.EmptyState
+import com.example.ui.components.InventorySkeleton
+import com.example.ui.components.ScannedFoodDialog
+import com.example.ui.components.SectionHeader
+import com.example.ui.components.TrackableDivider
+import com.example.ui.components.formatFoodQuantity
+import com.example.ui.components.formatMacroValue
 import com.example.ui.theme.BackgroundDark
-import com.example.ui.theme.CarbsOrange
-import com.example.ui.theme.FatPink
+import com.example.ui.theme.ClassicRed
 import com.example.ui.theme.PrimaryGreen
-import com.example.ui.theme.ProteinPurple
+import com.example.ui.theme.SurfaceCardHigh
 import com.example.ui.theme.SurfaceBorder
 import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.TextMuted
@@ -88,11 +98,13 @@ fun InventoryScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val isLoaded by viewModel.isLoaded.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var foodToEdit by remember { mutableStateOf<FoodEntity?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var showScanDialog by remember { mutableStateOf(false) }
+    var scannedFood by remember { mutableStateOf<FoodEntity?>(null) }
 
     LaunchedEffect(message) {
         message?.let {
@@ -106,12 +118,13 @@ fun InventoryScreen(
             .fillMaxSize()
             .testTag("inventory_screen"),
         containerColor = BackgroundDark,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
-                containerColor = PrimaryGreen,
-                contentColor = Color.Black,
+                containerColor = ClassicRed,
+                contentColor = Color.White,
                 shape = CircleShape,
                 modifier = Modifier.testTag("fab_add_food")
             ) {
@@ -124,140 +137,173 @@ fun InventoryScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Header
+            // Search + scan. The page title itself comes from the shared header,
+            // so there is no second oversized heading competing with it.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .padding(start = 16.dp, top = 4.dp, end = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "FOOD INVENTORY",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = PrimaryGreen,
-                            letterSpacing = 1.2.sp
-                        )
-                    )
-                    Text(
-                        text = "My Available Foods",
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    )
-                }
-
-                // Scan Nutrition Label Button
-                OutlinedButton(
-                    onClick = { showScanDialog = true },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryGreen),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryGreen.copy(alpha = 0.5f)),
-                    modifier = Modifier.testTag("scan_label_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CameraAlt,
-                        contentDescription = "Scan label",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Scan Label", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold))
-                }
-            }
-
-            // Search Bar
-            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { viewModel.onSearchQueryChanged(it) },
-                    placeholder = { Text("Search by food name or brand...", color = TextMuted) },
+                    placeholder = {
+                        Text(
+                            "Search foods or brands",
+                            color = TextMuted,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
                     leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = "Search", tint = TextMuted)
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = TextMuted,
+                            modifier = Modifier.size(19.dp)
+                        )
                     },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear search", tint = TextMuted)
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = "Clear search",
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(17.dp)
+                                )
                             }
                         }
                     },
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .weight(1f)
                         .testTag("search_food_input"),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
                         focusedContainerColor = SurfaceDark,
                         unfocusedContainerColor = SurfaceDark,
-                        focusedBorderColor = PrimaryGreen,
-                        unfocusedBorderColor = SurfaceBorder
+                        focusedBorderColor = ClassicRed.copy(alpha = 0.7f),
+                        unfocusedBorderColor = SurfaceBorder.copy(alpha = 0.6f)
                     ),
                     singleLine = true
                 )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceDark)
+                        .clickable { showScanDialog = true }
+                        .testTag("scan_label_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = "Scan nutrition label",
+                        tint = ClassicRed,
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
             }
 
-            // Category Filter Chips
+            // Category filters: quiet text tabs instead of a row of pills.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 categories.forEach { cat ->
                     val isSelected = selectedCategory == cat
-                    Box(
+                    Column(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isSelected) PrimaryGreen else SurfaceDark)
-                            .border(1.dp, if (isSelected) PrimaryGreen else SurfaceBorder, RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable { viewModel.onCategorySelected(cat) }
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                            .padding(horizontal = 9.dp, vertical = 5.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = cat,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = if (isSelected) Color.Black else TextSecondary,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isSelected) TextPrimary else TextMuted
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(18.dp)
+                                .height(2.dp)
+                                .clip(RoundedCornerShape(1.dp))
+                                .background(if (isSelected) ClassicRed else Color.Transparent)
                         )
                     }
                 }
             }
 
-            // Food Inventory List
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 80.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (foods.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 40.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No foods found matching \"$searchQuery\"",
-                                color = TextMuted,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
+                SectionHeader(
+                    title = "All foods",
+                    supportingText = if (searchQuery.isBlank()) {
+                        "${foods.size} item${if (foods.size == 1) "" else "s"}"
+                    } else {
+                        "${foods.size} result${if (foods.size == 1) "" else "s"}"
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Crossfade(
+                targetState = isLoaded,
+                animationSpec = tween(220),
+                label = "inventory_load",
+                modifier = Modifier.weight(1f)
+            ) { loaded ->
+                if (!loaded) {
+                    InventorySkeleton(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
                 } else {
-                    items(foods, key = { it.id }) { food ->
-                        InventoryFoodItemCard(
-                            food = food,
-                            onEdit = { foodToEdit = food },
-                            onDelete = { viewModel.deleteFood(food) },
-                            onLogToday = { qty -> viewModel.logFoodToToday(food, qty) }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 4.dp,
+                            bottom = 88.dp
                         )
+                    ) {
+                        if (foods.isEmpty()) {
+                            item {
+                                EmptyState(
+                                    icon = Icons.Default.Restaurant,
+                                    title = if (searchQuery.isBlank()) "No foods in your inventory" else "No matches",
+                                    message = if (searchQuery.isBlank()) {
+                                        "Add a food manually or scan a nutrition label to get started."
+                                    } else {
+                                        "Try a different name or category."
+                                    }
+                                )
+                            }
+                        } else {
+                            items(foods, key = { it.id }) { food ->
+                                InventoryFoodRow(
+                                    food = food,
+                                    onEdit = { foodToEdit = food },
+                                    onDelete = { viewModel.deleteFood(food) },
+                                    onLogToday = { qty -> viewModel.logFoodToToday(food, qty) },
+                                    modifier = Modifier.animateItem()
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -287,167 +333,190 @@ fun InventoryScreen(
             onDismiss = { showScanDialog = false },
             onExtracted = { extractedFood ->
                 showScanDialog = false
+                scannedFood = extractedFood
+            },
+            scanLabel = viewModel::scanNutritionLabel
+        )
+    }
+
+    // What the label scan found, shown as read-only information first.
+    scannedFood?.let { extractedFood ->
+        ScannedFoodDialog(
+            food = extractedFood,
+            onEdit = {
+                scannedFood = null
                 foodToEdit = extractedFood
-            }
+            },
+            onSave = {
+                viewModel.saveFood(extractedFood)
+                scannedFood = null
+            },
+            onDismiss = { scannedFood = null }
         )
     }
 }
 
 @Composable
-fun InventoryFoodItemCard(
+fun InventoryFoodRow(
     food: FoodEntity,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onLogToday: (Double) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("inventory_item_${food.id}"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))
+            .clickable(onClick = onEdit)
+            .padding(vertical = 12.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = food.name,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 2.dp)
-                    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = food.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary
+                )
+                Text(
+                    text = buildString {
                         if (food.brand.isNotBlank()) {
-                            Text(
-                                text = food.brand,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = PrimaryGreen,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            )
-                            Text(" • ", color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                            append(food.brand)
+                            append(" · ")
                         }
-                        Text(
-                            text = "${food.category} • Serving: ${if (food.servingSize % 1.0 == 0.0) food.servingSize.toInt() else food.servingSize} ${food.servingUnit}",
-                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                        )
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = { onLogToday(food.servingSize) },
-                        modifier = Modifier.size(36.dp).testTag("quick_log_inventory_${food.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Log to today",
-                            tint = PrimaryGreen,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onEdit,
-                        modifier = Modifier.size(36.dp).testTag("edit_inventory_${food.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit food",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(36.dp).testTag("delete_inventory_${food.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete food",
-                            tint = Color(0xFFEF4444),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
+                        append(food.category)
+                        append(" · ")
+                        append(formatFoodQuantity(food.servingSize))
+                        append(" ")
+                        append(food.servingUnit)
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TextMuted,
+                    modifier = Modifier.padding(top = 1.dp)
+                )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Box {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.size(30.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Actions for ${food.name}",
+                        tint = TextMuted,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
 
-            // Nutritional Badges
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                MiniNutrientBadge(
-                    label = "Calories",
-                    value = "${food.calories.toInt()} kcal",
-                    color = PrimaryGreen,
-                    modifier = Modifier.weight(1.2f)
-                )
-                MiniNutrientBadge(
-                    label = "Protein",
-                    value = "${food.protein}g",
-                    color = ProteinPurple,
-                    modifier = Modifier.weight(1f)
-                )
-                MiniNutrientBadge(
-                    label = "Carbs",
-                    value = "${food.carbohydrates}g",
-                    color = CarbsOrange,
-                    modifier = Modifier.weight(1f)
-                )
-                MiniNutrientBadge(
-                    label = "Fat",
-                    value = "${food.fat}g",
-                    color = FatPink,
-                    modifier = Modifier.weight(1f)
-                )
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    modifier = Modifier.background(SurfaceDark)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Log one serving", color = TextPrimary) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                tint = ClassicRed,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            onLogToday(food.servingSize)
+                            menuExpanded = false
+                        },
+                        modifier = Modifier.testTag("quick_log_inventory_${food.id}")
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Edit food", color = TextPrimary) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            onEdit()
+                            menuExpanded = false
+                        },
+                        modifier = Modifier.testTag("edit_inventory_${food.id}")
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = Color(0xFFEF4444)) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = null,
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        onClick = {
+                            onDelete()
+                            menuExpanded = false
+                        },
+                        modifier = Modifier.testTag("delete_inventory_${food.id}")
+                    )
+                }
             }
         }
+
+        Spacer(modifier = Modifier.height(9.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            NutrientCell(
+                label = "Calories",
+                value = "${food.calories.toInt()} kcal",
+                modifier = Modifier.weight(1.25f)
+            )
+            NutrientCell(
+                label = "Protein",
+                value = "${formatMacroValue(food.protein)}g",
+                modifier = Modifier.weight(1f)
+            )
+            NutrientCell(
+                label = "Carbs",
+                value = "${formatMacroValue(food.carbohydrates)}g",
+                modifier = Modifier.weight(1f)
+            )
+            NutrientCell(
+                label = "Fat",
+                value = "${formatMacroValue(food.fat)}g",
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        TrackableDivider(color = SurfaceBorder.copy(alpha = 0.45f))
     }
 }
 
 @Composable
-private fun MiniNutrientBadge(
+private fun NutrientCell(
     label: String,
     value: String,
-    color: Color,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF222732))
-            .padding(vertical = 5.dp, horizontal = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = color,
-                    fontSize = 11.sp
-                )
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = TextMuted,
-                    fontSize = 9.sp
-                )
-            )
-        }
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            color = TextMuted
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelLarge,
+            color = TextSecondary
+        )
     }
 }
 
@@ -455,7 +524,9 @@ private fun MiniNutrientBadge(
 fun FoodEditDialog(
     food: FoodEntity?,
     onDismiss: () -> Unit,
-    onSave: (FoodEntity) -> Unit
+    onSave: (FoodEntity) -> Unit,
+    titleOverride: String? = null,
+    saveLabel: String = "Save food"
 ) {
     var name by remember { mutableStateOf(food?.name ?: "") }
     var brand by remember { mutableStateOf(food?.brand ?: "") }
@@ -470,20 +541,23 @@ fun FoodEditDialog(
     var sugarText by remember { mutableStateOf(food?.sugar?.toString() ?: "") }
 
     var unitMenuExpanded by remember { mutableStateOf(false) }
-    val commonUnits = listOf("g", "ml", "scoop", "piece", "cup", "tbsp", "slice")
+    var categoryMenuExpanded by remember { mutableStateOf(false) }
+    val commonUnits = listOf("g", "ml", "scoop", "piece", "cup", "tbsp", "tsp", "slice", "serving")
+    val categoryOptions = remember(category) {
+        (FoodCategories.ALL + category).filter { it.isNotBlank() }.distinct()
+    }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SurfaceDark,
+        shape = RoundedCornerShape(18.dp),
         title = {
             Text(
-                text = if (food == null) "Add Food to Inventory" else "Edit Food",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
+                text = titleOverride ?: if (food == null) "Add food" else "Edit food",
+                style = MaterialTheme.typography.headlineSmall,
+                color = TextPrimary
             )
         },
         text = {
@@ -491,59 +565,97 @@ fun FoodEditDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 errorMessage?.let {
-                    Text(it, color = Color(0xFFEF4444), style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        text = it,
+                        color = Color(0xFFEF4444),
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
 
+                FormSectionLabel("Food")
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Food Name *") },
-                    placeholder = { Text("e.g. Whey Protein, Paneer, Rice") },
+                    label = { Text("Name *") },
+                    placeholder = { Text("e.g. Paneer, Whey protein", style = MaterialTheme.typography.bodySmall) },
                     modifier = Modifier.fillMaxWidth().testTag("food_name_input"),
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = foodFieldColors()
                 )
 
                 OutlinedTextField(
                     value = brand,
                     onValueChange = { brand = it },
-                    label = { Text("Brand / Product (e.g. Brand A, Fresh Dairy)") },
+                    label = { Text("Brand") },
+                    placeholder = { Text("Optional", style = MaterialTheme.typography.bodySmall) },
                     modifier = Modifier.fillMaxWidth().testTag("food_brand_input"),
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = foodFieldColors()
                 )
 
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("Category (e.g. Dairy, Supplements, Grains)") },
-                    modifier = Modifier.fillMaxWidth().testTag("food_category_input"),
-                    singleLine = true
-                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    CompactDropdownButton(
+                        label = "Category",
+                        value = category,
+                        expanded = categoryMenuExpanded,
+                        onClick = { categoryMenuExpanded = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("food_category_input")
+                    )
+                    DropdownMenu(
+                        expanded = categoryMenuExpanded,
+                        onDismissRequest = { categoryMenuExpanded = false },
+                        modifier = Modifier
+                            .background(SurfaceDark)
+                            .heightIn(max = 360.dp)
+                    ) {
+                        categoryOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        option,
+                                        color = if (option == category) ClassicRed else TextPrimary
+                                    )
+                                },
+                                onClick = {
+                                    category = option
+                                    categoryMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Top
                 ) {
                     OutlinedTextField(
                         value = servingSizeText,
                         onValueChange = { servingSizeText = it },
-                        label = { Text("Serving Size *") },
+                        label = { Text("Serving *") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.weight(1.2f).testTag("food_serving_size_input"),
-                        singleLine = true
+                        modifier = Modifier.weight(1f).testTag("food_serving_size_input"),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = foodFieldColors()
                     )
 
-                    Box(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
-                        OutlinedButton(
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactDropdownButton(
+                            label = "Unit",
+                            value = servingUnit,
+                            expanded = unitMenuExpanded,
                             onClick = { unitMenuExpanded = true },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(servingUnit, style = MaterialTheme.typography.bodyMedium)
-                        }
-
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         DropdownMenu(
                             expanded = unitMenuExpanded,
                             onDismissRequest = { unitMenuExpanded = false },
@@ -562,23 +674,18 @@ fun FoodEditDialog(
                     }
                 }
 
-                Text(
-                    text = "NUTRITION PER SERVING",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = PrimaryGreen,
-                        letterSpacing = 1.sp
-                    ),
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                FormSectionLabel("Nutrition per serving")
 
                 OutlinedTextField(
                     value = caloriesText,
                     onValueChange = { caloriesText = it },
-                    label = { Text("Calories (kcal) *") },
+                    label = { Text("Calories *") },
+                    suffix = { Text("kcal", style = MaterialTheme.typography.labelSmall, color = TextMuted) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("food_calories_input"),
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = foodFieldColors()
                 )
 
                 Row(
@@ -588,26 +695,35 @@ fun FoodEditDialog(
                     OutlinedTextField(
                         value = proteinText,
                         onValueChange = { proteinText = it },
-                        label = { Text("Protein (g) *") },
+                        label = { Text("Protein *") },
+                        suffix = { Text("g", style = MaterialTheme.typography.labelSmall, color = TextMuted) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f).testTag("food_protein_input"),
-                        singleLine = true
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = foodFieldColors()
                     )
                     OutlinedTextField(
                         value = carbsText,
                         onValueChange = { carbsText = it },
-                        label = { Text("Carbs (g) *") },
+                        label = { Text("Carbs *") },
+                        suffix = { Text("g", style = MaterialTheme.typography.labelSmall, color = TextMuted) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f).testTag("food_carbs_input"),
-                        singleLine = true
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = foodFieldColors()
                     )
                     OutlinedTextField(
                         value = fatText,
                         onValueChange = { fatText = it },
-                        label = { Text("Fat (g) *") },
+                        label = { Text("Fat *") },
+                        suffix = { Text("g", style = MaterialTheme.typography.labelSmall, color = TextMuted) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f).testTag("food_fat_input"),
-                        singleLine = true
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = foodFieldColors()
                     )
                 }
 
@@ -618,18 +734,24 @@ fun FoodEditDialog(
                     OutlinedTextField(
                         value = fiberText,
                         onValueChange = { fiberText = it },
-                        label = { Text("Fiber (g)") },
+                        label = { Text("Fiber") },
+                        suffix = { Text("g", style = MaterialTheme.typography.labelSmall, color = TextMuted) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f),
-                        singleLine = true
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = foodFieldColors()
                     )
                     OutlinedTextField(
                         value = sugarText,
                         onValueChange = { sugarText = it },
-                        label = { Text("Sugar (g)") },
+                        label = { Text("Sugar") },
+                        suffix = { Text("g", style = MaterialTheme.typography.labelSmall, color = TextMuted) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f),
-                        singleLine = true
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        colors = foodFieldColors()
                     )
                 }
             }
@@ -667,10 +789,11 @@ fun FoodEditDialog(
                     )
                     onSave(updated)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen, contentColor = Color.Black),
+                colors = ButtonDefaults.buttonColors(containerColor = ClassicRed, contentColor = Color.White),
+                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.testTag("save_food_button")
             ) {
-                Text("Save to Inventory", fontWeight = FontWeight.Bold)
+                Text(saveLabel, fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
@@ -681,122 +804,95 @@ fun FoodEditDialog(
     )
 }
 
+/** Small uppercase-free label that separates the parts of the food form. */
 @Composable
-fun NutritionLabelScannerDialog(
-    onDismiss: () -> Unit,
-    onExtracted: (FoodEntity) -> Unit
+private fun FormSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = TextMuted,
+        modifier = Modifier.padding(top = 6.dp)
+    )
+}
+
+/** A dropdown that matches the flat look of the food form. */
+@Composable
+private fun CompactDropdownButton(
+    label: String,
+    value: String,
+    expanded: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    // Label scanner with presets or manual snapshot
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = SurfaceDark,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CameraAlt, contentDescription = null, tint = PrimaryGreen)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Nutrition Label Scanner", color = TextPrimary, fontWeight = FontWeight.Bold)
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Position camera at the nutrition facts table. You can also select a common scanned product template below:",
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                )
-
-                // Presets from scanning
-                val scanPresets = listOf(
-                    FoodEntity(
-                        name = "Optimum Nutrition Whey",
-                        brand = "ON Gold Standard",
-                        category = "Supplements",
-                        servingSize = 1.0,
-                        servingUnit = "scoop",
-                        calories = 120.0,
-                        protein = 24.0,
-                        carbohydrates = 3.0,
-                        fat = 1.5,
-                        fiber = 0.0,
-                        sugar = 1.0
-                    ),
-                    FoodEntity(
-                        name = "Amul Malai Paneer",
-                        brand = "Amul",
-                        category = "Dairy",
-                        servingSize = 100.0,
-                        servingUnit = "g",
-                        calories = 295.0,
-                        protein = 18.0,
-                        carbohydrates = 4.0,
-                        fat = 23.0
-                    ),
-                    FoodEntity(
-                        name = "Almond Butter",
-                        brand = "Kirkland",
-                        category = "Spreads",
-                        servingSize = 32.0,
-                        servingUnit = "g",
-                        calories = 210.0,
-                        protein = 6.0,
-                        carbohydrates = 6.0,
-                        fat = 18.0,
-                        fiber = 3.0,
-                        sugar = 1.0
-                    )
-                )
-
-                scanPresets.forEach { preset ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onExtracted(preset) },
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF13161C)),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(preset.name, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                Text("${preset.brand} • ${preset.calories.toInt()} kcal (${preset.protein}g P)", color = TextSecondary, fontSize = 11.sp)
-                            }
-                            Text("Use Data", color = PrimaryGreen, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    // Default scan template
-                    onExtracted(
-                        FoodEntity(
-                            name = "Scanned Nutrition Product",
-                            brand = "Product Label",
-                            category = "Scanned",
-                            servingSize = 100.0,
-                            servingUnit = "g",
-                            calories = 250.0,
-                            protein = 15.0,
-                            carbohydrates = 20.0,
-                            fat = 10.0
-                        )
-                    )
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen, contentColor = Color.Black)
-            ) {
-                Text("Simulate Camera OCR")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextMuted)
-            }
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextMuted,
+            modifier = Modifier.padding(start = 2.dp, bottom = 4.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(SurfaceCardHigh)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextPrimary,
+                modifier = Modifier.weight(1f),
+                maxLines = 1
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                contentDescription = "Choose $label",
+                tint = TextMuted,
+                modifier = Modifier.size(18.dp)
+            )
         }
+    }
+}
+
+@Composable
+private fun foodFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary,
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent,
+    focusedBorderColor = ClassicRed,
+    unfocusedBorderColor = SurfaceBorder,
+    focusedLabelColor = ClassicRed,
+    unfocusedLabelColor = TextMuted,
+    cursorColor = ClassicRed
+)
+
+/** Categories offered by the inventory food form. "Other" keeps custom items possible. */
+object FoodCategories {
+    val ALL = listOf(
+        "Dairy",
+        "Meat & Poultry",
+        "Fish & Seafood",
+        "Eggs",
+        "Grains & Cereals",
+        "Legumes & Pulses",
+        "Vegetables",
+        "Fruits",
+        "Nuts & Seeds",
+        "Oils & Fats",
+        "Bakery",
+        "Snacks",
+        "Beverages",
+        "Supplements",
+        "Frozen Foods",
+        "Condiments & Sauces",
+        "Sweets & Desserts",
+        "Fast Food",
+        "General",
+        "Other"
     )
 }

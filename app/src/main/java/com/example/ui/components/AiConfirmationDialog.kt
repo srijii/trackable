@@ -59,10 +59,12 @@ import com.example.ai.ParsedItemCandidate
 import com.example.data.database.FoodEntity
 import com.example.domain.NutritionCalculationEngine
 import com.example.ui.theme.CarbsOrange
+import com.example.ui.theme.ClassicRed
 import com.example.ui.theme.FatPink
 import com.example.ui.theme.PrimaryGreen
 import com.example.ui.theme.ProteinPurple
 import com.example.ui.theme.SurfaceBorder
+import com.example.ui.theme.SurfaceCardHigh
 import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
@@ -107,33 +109,21 @@ fun AiConfirmationDialog(
                     Icon(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = "AI Parsed",
-                        tint = PrimaryGreen,
-                        modifier = Modifier.size(22.dp)
+                        tint = ClassicRed,
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Review & Confirm",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
+                        text = "Review & confirm",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = TextPrimary
                     )
                 }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF222732))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = parseResult.providerUsed,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = PrimaryGreen,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    )
-                }
+                Text(
+                    text = parseResult.providerUsed,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted
+                )
             }
         },
         text = {
@@ -151,54 +141,37 @@ fun AiConfirmationDialog(
 
                 // Water notice if detected
                 if (currentWaterMl > 0) {
-                    Card(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 10.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF13222F)),
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, WaterCyan.copy(alpha = 0.4f))
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.WaterDrop,
+                                contentDescription = "Water",
+                                tint = WaterCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "+$currentWaterMl ml water will be logged",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = WaterCyan
+                            )
+                        }
+                        IconButton(
+                            onClick = { currentWaterMl = 0 },
+                            modifier = Modifier.size(26.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.WaterDrop,
-                                    contentDescription = "Water",
-                                    tint = WaterCyan,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        text = "Water Intake Detected",
-                                        style = MaterialTheme.typography.titleSmall.copy(
-                                            color = TextPrimary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                    Text(
-                                        text = "+$currentWaterMl ml water will be logged",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = WaterCyan,
-                                            fontSize = 11.sp
-                                        )
-                                    )
-                                }
-                            }
-                            IconButton(onClick = { currentWaterMl = 0 }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Remove water",
-                                    tint = TextMuted,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Remove water",
+                                tint = TextMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
                         }
                     }
                 }
@@ -238,70 +211,44 @@ fun AiConfirmationDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Meal Totals Summary
+                // Meal totals
                 if (editableItems.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF222732))
-                            .padding(12.dp)
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text(
-                                    text = "MEAL TOTALS",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = TextMuted,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    )
-                                )
-                                Text(
-                                    text = "${totalCalories.toInt()} kcal",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        color = PrimaryGreen,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "${Math.round(totalProtein * 10.0) / 10.0}g",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = ProteinPurple,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                    Text("Protein", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 9.sp))
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "${Math.round(totalCarbs * 10.0) / 10.0}g",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = CarbsOrange,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                    Text("Carbs", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 9.sp))
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "${Math.round(totalFat * 10.0) / 10.0}g",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = FatPink,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                    Text("Fat", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 9.sp))
-                                }
-                            }
+                            Text(
+                                text = "Meal total",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted
+                            )
+                            Text(
+                                text = "${totalCalories.toInt()} kcal",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TextPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Text(
+                                text = "P ${Math.round(totalProtein * 10.0) / 10.0}g",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextSecondary
+                            )
+                            Text(
+                                text = "C ${Math.round(totalCarbs * 10.0) / 10.0}g",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextSecondary
+                            )
+                            Text(
+                                text = "F ${Math.round(totalFat * 10.0) / 10.0}g",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextSecondary
+                            )
                         }
                     }
                 }
@@ -314,13 +261,13 @@ fun AiConfirmationDialog(
                 },
                 enabled = editableItems.any { it.matchedFood != null } || currentWaterMl > 0,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PrimaryGreen,
-                    contentColor = Color.Black
+                    containerColor = ClassicRed,
+                    contentColor = Color.White
                 ),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.testTag("confirm_log_all_button")
             ) {
-                Text("Confirm & Log", fontWeight = FontWeight.Bold)
+                Text("Confirm & log", fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
@@ -344,16 +291,11 @@ private fun ParsedItemEditorCard(
     var quantityText by remember { mutableStateOf(if (item.quantity % 1.0 == 0.0) "${item.quantity.toInt()}" else "${item.quantity}") }
     var showMatchDropdown by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF13161C)),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (item.isAmbiguous || item.isUnmatched) WarningYellow.copy(alpha = 0.6f) else SurfaceBorder
-        )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
             // Header: Food name + remove button
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -431,7 +373,7 @@ private fun ParsedItemEditorCard(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(if (isSelected) PrimaryGreen else Color(0xFF1B2028))
+                                        .background(if (isSelected) ClassicRed else SurfaceCardHigh)
                                         .clickable {
                                             val calc = NutritionCalculationEngine.calculate(
                                                 food = candidate,
@@ -455,7 +397,7 @@ private fun ParsedItemEditorCard(
                                     Text(
                                         text = "${candidate.name} (${candidate.brand})",
                                         style = MaterialTheme.typography.labelSmall.copy(
-                                            color = if (isSelected) Color.Black else TextPrimary,
+                                            color = if (isSelected) Color.White else TextPrimary,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                             fontSize = 10.sp
                                         ),
@@ -583,9 +525,9 @@ private fun ParsedItemEditorCard(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
-                        focusedContainerColor = SurfaceDark,
-                        unfocusedContainerColor = SurfaceDark,
-                        focusedBorderColor = PrimaryGreen,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedBorderColor = ClassicRed,
                         unfocusedBorderColor = SurfaceBorder
                     ),
                     singleLine = true
@@ -595,16 +537,15 @@ private fun ParsedItemEditorCard(
                     modifier = Modifier
                         .height(50.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF222732))
-                        .border(1.dp, SurfaceBorder, RoundedCornerShape(8.dp))
+                        .background(SurfaceCardHigh)
                         .padding(horizontal = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = item.servingUnit,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            color = PrimaryGreen,
-                            fontWeight = FontWeight.Bold
+                            color = TextSecondary,
+                            fontWeight = FontWeight.Medium
                         )
                     )
                 }
@@ -620,8 +561,8 @@ private fun ParsedItemEditorCard(
                     Text(
                         text = "${item.calculatedCalories.toInt()} kcal",
                         style = MaterialTheme.typography.labelMedium.copy(
-                            color = PrimaryGreen,
-                            fontWeight = FontWeight.Bold
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold
                         )
                     )
                     Text(
@@ -635,4 +576,3 @@ private fun ParsedItemEditorCard(
             }
         }
     }
-}

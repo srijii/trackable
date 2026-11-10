@@ -109,13 +109,12 @@ fun AnimatedWaterCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("animated_water_card"),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceDark)
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header Row
             Row(
@@ -124,36 +123,24 @@ fun AnimatedWaterCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF38BDF8).copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.WaterDrop,
-                            contentDescription = "Water",
-                            tint = Color(0xFF38BDF8),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Default.WaterDrop,
+                        contentDescription = "Water",
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Water Intake",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
+                        text = "Water",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary
                     )
                 }
 
                 Text(
                     text = "${litersConsumed}L / ${litersGoal}L",
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        color = Color(0xFF38BDF8),
-                        fontWeight = FontWeight.Bold
-                    )
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFF38BDF8)
                 )
             }
 
@@ -163,10 +150,9 @@ fun AnimatedWaterCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(64.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .height(54.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Color(0xFF10141C))
-                    .border(1.dp, Color(0xFF263345), RoundedCornerShape(16.dp))
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val width = size.width
@@ -247,39 +233,30 @@ fun AnimatedWaterCard(
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.Bottom) {
                         Text(
                             text = "$waterConsumedMl ml",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Black,
-                                color = TextPrimary
-                            )
+                            style = MaterialTheme.typography.titleSmall,
+                            color = TextPrimary
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "consumed",
-                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                            text = "of $waterGoalMl ml",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(bottom = 1.dp)
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF111722).copy(alpha = 0.8f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "${(progress * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF38BDF8)
-                            )
-                        )
-                    }
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFF38BDF8)
+                    )
                 }
             }
 
@@ -292,8 +269,9 @@ fun AnimatedWaterCard(
                 // Minus Cup
                 IconButton(
                     onClick = onRemoveCup,
+                    enabled = waterConsumedMl > 0,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF1E232B))
                         .testTag("remove_water_cup_button")
@@ -301,59 +279,49 @@ fun AnimatedWaterCard(
                     Icon(
                         imageVector = Icons.Default.Remove,
                         contentDescription = "Remove Cup",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(20.dp)
+                        tint = if (waterConsumedMl > 0) TextSecondary else TextMuted.copy(alpha = 0.4f),
+                        modifier = Modifier.size(17.dp)
                     )
                 }
 
                 // Cups Remaining Label
                 Text(
-                    text = if (waterRemainingMl > 0) "$waterRemainingMl ml Remaining" else "Daily Target Reached! 🎉",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = if (waterRemainingMl > 0) TextSecondary else Color(0xFF10B981),
-                        fontWeight = FontWeight.Medium
-                    )
+                    text = if (waterRemainingMl > 0) "$waterRemainingMl ml left" else "Target reached",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (waterRemainingMl > 0) TextMuted else Color(0xFF10B981)
                 )
 
                 // Quick Increment Action Buttons (the 2 configured cup sizes)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Cup 1
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFF1E232B))
-                            .border(1.dp, SurfaceBorder, RoundedCornerShape(10.dp))
                             .clickable { onAddCup1() }
-                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                            .padding(horizontal = 10.dp, vertical = 7.dp)
                             .testTag("add_cup_1_button"),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "+$cupSize1Ml ml",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = Color(0xFF38BDF8),
-                                fontWeight = FontWeight.Bold
-                            )
+                            text = "+${cupSize1Ml} ml",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF38BDF8)
                         )
                     }
 
-                    // Cup 2
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFF1E232B))
-                            .border(1.dp, SurfaceBorder, RoundedCornerShape(10.dp))
                             .clickable { onAddCup2() }
-                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                            .padding(horizontal = 10.dp, vertical = 7.dp)
                             .testTag("add_cup_2_button"),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "+$cupSize2Ml ml",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = Color(0xFF38BDF8),
-                                fontWeight = FontWeight.Bold
-                            )
+                            text = "+${cupSize2Ml} ml",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF38BDF8)
                         )
                     }
                 }

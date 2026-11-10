@@ -1,7 +1,6 @@
 package com.example.ui.screens.weight
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,31 +17,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.MonitorWeight
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Scale
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -62,22 +54,25 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.database.WeightLogEntity
+import com.example.ui.components.EmptyState
+import com.example.ui.components.MetricBlock
+import com.example.ui.components.SectionHeader
+import com.example.ui.components.TrackableDivider
+import com.example.ui.components.WeightHistorySkeleton
+import com.example.ui.components.WeightSummarySkeleton
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.ClassicRed
-import com.example.ui.theme.ClassicRedGlow
-import com.example.ui.theme.SelectedRedBorder
+import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.SurfaceBorder
 import com.example.ui.theme.SurfaceCardHigh
-import com.example.ui.theme.SurfaceDark
-import com.example.ui.theme.SurfacePill
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun WeightTrackerScreen(
@@ -97,6 +92,7 @@ fun WeightTrackerScreen(
         }
     }
 
+    val loaded = goals != null
     val latestLog = weightLogs.firstOrNull()
     val currentWeight = latestLog?.weightKg ?: goals?.currentWeightKg ?: 75.0
     val targetWeight = goals?.targetWeightKg ?: 70.0
@@ -104,7 +100,9 @@ fun WeightTrackerScreen(
 
     // Form state
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
-    var weightInputText by remember(currentWeight) { mutableStateOf(String.format(java.util.Locale.US, "%.1f", currentWeight)) }
+    var weightInputText by remember(currentWeight) {
+        mutableStateOf(String.format(Locale.US, "%.1f", currentWeight))
+    }
     var noteInputText by remember { mutableStateOf("") }
     var dateMenuExpanded by remember { mutableStateOf(false) }
 
@@ -113,222 +111,145 @@ fun WeightTrackerScreen(
             .fillMaxSize()
             .testTag("weight_tracker_screen"),
         containerColor = BackgroundDark,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp)
         ) {
-            // Header
-            item {
-                Text(
-                    text = "BODY COMPOSITION",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = ClassicRed,
-                        letterSpacing = 1.2.sp
+            if (!loaded) {
+                item {
+                    WeightSummarySkeleton(modifier = Modifier.padding(top = 8.dp))
+                }
+                item {
+                    WeightHistorySkeleton(
+                        rows = 4,
+                        modifier = Modifier.padding(top = 24.dp)
                     )
-                )
-                Text(
-                    text = "Weight Tracker",
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                )
-            }
-
-            // 1. Current Weight & Target Overview Card
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
+                }
+            } else {
+                // Current weight is the hero: one big number, supporting stats
+                // below it, no container competing with the value.
+                item {
+                    Column(modifier = Modifier.padding(top = 4.dp)) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(ClassicRed.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Scale,
-                                        contentDescription = null,
-                                        tint = ClassicRed,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "Current Weight",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
-                                    )
-                                )
-                            }
-
-                            if (latestLog != null) {
-                                val logDate = LocalDate.ofEpochDay(latestLog.dateEpochDay)
-                                val dateStr = if (logDate == LocalDate.now()) "Today" else logDate.format(DateTimeFormatter.ofPattern("MMM d"))
+                            Text(
+                                text = "CURRENT WEIGHT",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                modifier = Modifier.weight(1f)
+                            )
+                            latestLog?.let { log ->
+                                val logDate = LocalDate.ofEpochDay(log.dateEpochDay)
+                                val dateStr = if (logDate == LocalDate.now()) "today"
+                                else logDate.format(DateTimeFormatter.ofPattern("MMM d"))
                                 Text(
                                     text = "Updated $dateStr",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted)
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
                                 )
                             }
                         }
 
-                        // Big Weight readout
-                        Row(
-                            verticalAlignment = Alignment.Bottom,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        Row(verticalAlignment = Alignment.Bottom) {
                             Text(
-                                text = String.format(java.util.Locale.US, "%.1f", currentWeight),
-                                style = MaterialTheme.typography.displayMedium.copy(
-                                    fontWeight = FontWeight.Black,
-                                    color = TextPrimary
-                                )
+                                text = String.format(Locale.US, "%.1f", currentWeight),
+                                style = MaterialTheme.typography.displayLarge,
+                                color = TextPrimary
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "kg",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    color = ClassicRed,
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                modifier = Modifier.padding(bottom = 8.dp)
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = TextMuted,
+                                modifier = Modifier.padding(bottom = 7.dp)
                             )
                         }
 
-                        // Targets & Stats Strip
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        val diffToTarget = currentWeight - targetWeight
+                        val heightM = heightCm / 100.0
+                        val bmi = if (heightM > 0) currentWeight / (heightM * heightM) else 0.0
+
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF13151A))
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceAround
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(20.dp)
                         ) {
-                            // Target
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("TARGET", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 10.sp))
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "${String.format(java.util.Locale.US, "%.1f", targetWeight)} kg",
-                                    style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold)
-                                )
-                            }
-
-                            // Diff to Target
-                            val diffToTarget = currentWeight - targetWeight
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("TO GO", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 10.sp))
-                                Spacer(modifier = Modifier.height(2.dp))
-                                val sign = if (diffToTarget > 0) "-" else "+"
-                                Text(
-                                    text = "$sign${String.format(java.util.Locale.US, "%.1f", kotlin.math.abs(diffToTarget))} kg",
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        color = if (diffToTarget <= 0) Color(0xFF10B981) else ClassicRed,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-
-                            // BMI
-                            val heightM = heightCm / 100.0
-                            val bmi = if (heightM > 0) currentWeight / (heightM * heightM) else 0.0
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("BMI", style = MaterialTheme.typography.labelSmall.copy(color = TextMuted, fontSize = 10.sp))
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = String.format(java.util.Locale.US, "%.1f", bmi),
-                                    style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary, fontWeight = FontWeight.Bold)
-                                )
-                            }
+                            MetricBlock(
+                                label = "Target",
+                                value = "${String.format(Locale.US, "%.1f", targetWeight)} kg",
+                                modifier = Modifier.weight(1f)
+                            )
+                            MetricBlock(
+                                label = "To go",
+                                value = "${if (diffToTarget > 0) "-" else "+"}${
+                                    String.format(Locale.US, "%.1f", kotlin.math.abs(diffToTarget))
+                                } kg",
+                                valueColor = if (diffToTarget <= 0) SuccessGreen else ClassicRed,
+                                modifier = Modifier.weight(1f)
+                            )
+                            MetricBlock(
+                                label = "BMI",
+                                value = String.format(Locale.US, "%.1f", bmi),
+                                supporting = bmiLabel(bmi),
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
-            }
 
-            // 2. Log / Edit Weight Entry Card
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Text(
-                            text = "Record Weigh-in",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
+                // Record form: compact fields with a single dominant action.
+                item {
+                    Column(modifier = Modifier.padding(top = 24.dp)) {
+                        SectionHeader(
+                            title = "Record weigh-in",
+                            supportingText = "Skipped days never break your history."
                         )
-                        Text(
-                            text = "Log your weight on days you step on the scale. Skipped days are handled automatically without breaking streaks or graphs.",
-                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
-                        )
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        // Date Selector
-                        Box {
-                            OutlinedButton(
-                                onClick = { dateMenuExpanded = true },
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder)
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable { dateMenuExpanded = true }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.CalendarToday,
-                                            contentDescription = null,
-                                            tint = ClassicRed,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Date:", color = TextMuted)
-                                    }
-                                    val dateLabel = when (selectedDate) {
-                                        LocalDate.now() -> "Today (${selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))})"
-                                        LocalDate.now().minusDays(1) -> "Yesterday"
-                                        else -> selectedDate.format(DateTimeFormatter.ofPattern("EEE, MMM d, yyyy"))
-                                    }
-                                    Text(dateLabel, color = TextPrimary, fontWeight = FontWeight.Bold)
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(7.dp))
+                                Text(
+                                    text = dateLabel(selectedDate),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextSecondary
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Choose weigh-in date",
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
 
                             DropdownMenu(
                                 expanded = dateMenuExpanded,
                                 onDismissRequest = { dateMenuExpanded = false },
-                                modifier = Modifier.background(SurfaceDark)
+                                modifier = Modifier.background(SurfaceCardHigh)
                             ) {
                                 listOf(
                                     LocalDate.now() to "Today",
@@ -337,11 +258,16 @@ fun WeightTrackerScreen(
                                     LocalDate.now().minusDays(3) to "3 days ago",
                                     LocalDate.now().minusDays(4) to "4 days ago",
                                     LocalDate.now().minusDays(7) to "1 week ago"
-                                ).forEach { (d, label) ->
+                                ).forEach { (date, label) ->
                                     DropdownMenuItem(
-                                        text = { Text("$label (${d.format(DateTimeFormatter.ofPattern("MMM d"))})", color = TextPrimary) },
+                                        text = {
+                                            Text(
+                                                "$label (${date.format(DateTimeFormatter.ofPattern("MMM d"))})",
+                                                color = TextPrimary
+                                            )
+                                        },
                                         onClick = {
-                                            selectedDate = d
+                                            selectedDate = date
                                             dateMenuExpanded = false
                                         }
                                     )
@@ -349,247 +275,257 @@ fun WeightTrackerScreen(
                             }
                         }
 
-                        // Weight Input Field + Adjustment Quick Buttons
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             OutlinedTextField(
                                 value = weightInputText,
                                 onValueChange = { weightInputText = it },
-                                label = { Text("Weight (kg)") },
+                                suffix = { Text("kg", color = TextMuted) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 singleLine = true,
                                 modifier = Modifier
-                                    .fillMaxWidth()
+                                    .weight(1f)
                                     .testTag("weight_input_field"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = TextPrimary,
-                                    unfocusedTextColor = TextPrimary,
-                                    focusedContainerColor = Color(0xFF13151A),
-                                    unfocusedContainerColor = Color(0xFF13151A),
-                                    focusedBorderColor = ClassicRed,
-                                    unfocusedBorderColor = SurfaceBorder
-                                )
+                                shape = RoundedCornerShape(12.dp),
+                                colors = weightFieldColors()
                             )
 
-                            // Quick Bump Buttons (-0.5, -0.1, +0.1, +0.5)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                listOf(-0.5, -0.1, 0.1, 0.5).forEach { delta ->
-                                    val prefix = if (delta > 0) "+$delta" else "$delta"
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF1E2129))
-                                            .clickable {
-                                                val cur = weightInputText.toDoubleOrNull() ?: currentWeight
-                                                val newW = (cur + delta).coerceAtLeast(20.0)
-                                                weightInputText = String.format(java.util.Locale.US, "%.1f", newW)
-                                            }
-                                            .padding(vertical = 8.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = prefix,
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                color = if (delta > 0) ClassicRed else TextSecondary,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        )
+                            Button(
+                                onClick = {
+                                    val w = weightInputText.toDoubleOrNull()
+                                    if (w != null && w in 20.0..300.0) {
+                                        viewModel.logWeight(selectedDate, w, noteInputText.trim())
+                                        noteInputText = ""
                                     }
+                                },
+                                modifier = Modifier
+                                    .height(56.dp)
+                                    .testTag("save_weight_button"),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = ClassicRed,
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "Save",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Fine adjustment: small, quiet deltas next to the field.
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(-0.5, -0.1, 0.1, 0.5).forEach { delta ->
+                                val prefix = if (delta > 0) "+$delta" else "$delta"
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(SurfaceCardHigh)
+                                        .clickable {
+                                            val cur = weightInputText.toDoubleOrNull() ?: currentWeight
+                                            val newW = (cur + delta).coerceAtLeast(20.0)
+                                            weightInputText = String.format(Locale.US, "%.1f", newW)
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = prefix,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (delta > 0) ClassicRed else TextSecondary
+                                    )
                                 }
                             }
                         }
 
-                        // Note input
+                        Spacer(modifier = Modifier.height(10.dp))
+
                         OutlinedTextField(
                             value = noteInputText,
                             onValueChange = { noteInputText = it },
-                            label = { Text("Note (optional)") },
-                            placeholder = { Text("e.g., Morning fasted, post-workout") },
+                            placeholder = {
+                                Text(
+                                    "Note (optional) — morning fasted, post-workout…",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextMuted
+                                )
+                            },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedContainerColor = Color(0xFF13151A),
-                                unfocusedContainerColor = Color(0xFF13151A),
-                                focusedBorderColor = ClassicRed,
-                                unfocusedBorderColor = SurfaceBorder
-                            )
+                            shape = RoundedCornerShape(12.dp),
+                            colors = weightFieldColors()
                         )
-
-                        // Save Button
-                        Button(
-                            onClick = {
-                                val w = weightInputText.toDoubleOrNull()
-                                if (w != null && w in 20.0..300.0) {
-                                    viewModel.logWeight(selectedDate, w, noteInputText.trim())
-                                    noteInputText = ""
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                                .testTag("save_weight_button"),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = ClassicRed,
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Save Weight Entry",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        }
                     }
                 }
-            }
 
-            // 3. Weight History List
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Weigh-in History",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                    )
-                    Text(
-                        text = "${weightLogs.size} recorded",
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextMuted)
-                    )
-                }
-            }
-
-            if (weightLogs.isEmpty()) {
+                // History: flat rows, hairline separators, compact deltas.
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(SurfaceDark)
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No weight logs recorded yet. Log your first weight above!",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = TextMuted)
+                    SectionHeader(
+                        title = "Weigh-in history",
+                        trailing = {
+                            Text(
+                                text = "${weightLogs.size} recorded",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextMuted
+                            )
+                        },
+                        modifier = Modifier.padding(top = 24.dp, bottom = 2.dp)
+                    )
+                }
+
+                if (weightLogs.isEmpty()) {
+                    item {
+                        EmptyState(
+                            icon = Icons.Default.MonitorWeight,
+                            title = "No weigh-ins yet",
+                            message = "Log your weight above to start the trend."
+                        )
+                    }
+                } else {
+                    itemsIndexed(weightLogs, key = { _, log -> log.id }) { index, log ->
+                        val nextOlderLog = weightLogs.getOrNull(index + 1)
+                        val diff = if (nextOlderLog != null) log.weightKg - nextOlderLog.weightKg else null
+                        WeightHistoryRow(
+                            log = log,
+                            diff = diff,
+                            onDelete = { viewModel.deleteWeightLog(log) },
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
-            } else {
-                itemsIndexed(weightLogs) { index, log ->
-                    val nextOlderLog = weightLogs.getOrNull(index + 1)
-                    val diff = if (nextOlderLog != null) log.weightKg - nextOlderLog.weightKg else null
-                    val logDate = LocalDate.ofEpochDay(log.dateEpochDay)
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = logDate.format(DateTimeFormatter.ofPattern("EEE, MMM d")),
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            color = TextPrimary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                    if (logDate == LocalDate.now()) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(ClassicRed.copy(alpha = 0.2f))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text("Today", color = ClassicRed, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
-
-                                if (log.note.isNotBlank()) {
-                                    Text(
-                                        text = log.note,
-                                        style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 11.sp)
-                                    )
-                                }
-                            }
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = "${String.format(java.util.Locale.US, "%.1f", log.weightKg)} kg",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            color = TextPrimary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-
-                                    if (diff != null) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            val isLoss = diff < 0
-                                            val icon = if (isLoss) Icons.AutoMirrored.Filled.TrendingDown else if (diff > 0) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingFlat
-                                            val color = if (isLoss) Color(0xFF10B981) else if (diff > 0) ClassicRed else TextMuted
-                                            val sign = if (diff > 0) "+" else ""
-
-                                            Icon(
-                                                imageVector = icon,
-                                                contentDescription = null,
-                                                tint = color,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            Text(
-                                                text = "$sign${String.format(java.util.Locale.US, "%.1f", diff)} kg",
-                                                style = MaterialTheme.typography.labelSmall.copy(color = color, fontSize = 11.sp)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.width(8.dp))
-                                IconButton(
-                                    onClick = { viewModel.deleteWeightLog(log) },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete",
-                                        tint = TextMuted.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
+                item { Spacer(modifier = Modifier.height(8.dp)) }
             }
         }
     }
+}
+
+@Composable
+private fun WeightHistoryRow(
+    log: WeightLogEntity,
+    diff: Double?,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val logDate = LocalDate.ofEpochDay(log.dateEpochDay)
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (logDate == LocalDate.now()) "Today"
+                        else logDate.format(DateTimeFormatter.ofPattern("EEE, MMM d")),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = TextPrimary
+                    )
+                    if (logDate == LocalDate.now()) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "· latest",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMuted
+                        )
+                    }
+                }
+                if (log.note.isNotBlank()) {
+                    Text(
+                        text = log.note,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
+                }
+            }
+
+            if (diff != null) {
+                val isLoss = diff < 0
+                val icon = when {
+                    isLoss -> Icons.AutoMirrored.Filled.TrendingDown
+                    diff > 0 -> Icons.AutoMirrored.Filled.TrendingUp
+                    else -> Icons.AutoMirrored.Filled.TrendingFlat
+                }
+                val color = when {
+                    isLoss -> SuccessGreen
+                    diff > 0 -> ClassicRed
+                    else -> TextMuted
+                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = "${if (diff > 0) "+" else ""}${String.format(Locale.US, "%.1f", diff)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = color
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+
+            Text(
+                text = String.format(Locale.US, "%.1f kg", log.weightKg),
+                style = MaterialTheme.typography.titleSmall,
+                color = TextPrimary
+            )
+
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier
+                    .padding(start = 2.dp)
+                    .size(30.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete weigh-in",
+                    tint = TextMuted.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+        TrackableDivider(color = SurfaceBorder.copy(alpha = 0.45f))
+    }
+}
+
+@Composable
+private fun weightFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary,
+    focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+    unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+    focusedBorderColor = ClassicRed.copy(alpha = 0.75f),
+    unfocusedBorderColor = SurfaceBorder.copy(alpha = 0.7f)
+)
+
+private fun dateLabel(date: LocalDate): String = when (date) {
+    LocalDate.now() -> "Today, ${date.format(DateTimeFormatter.ofPattern("MMM d"))}"
+    LocalDate.now().minusDays(1) -> "Yesterday"
+    else -> date.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+}
+
+private fun bmiLabel(bmi: Double): String = when {
+    bmi <= 0.0 -> ""
+    bmi < 18.5 -> "Under"
+    bmi < 25.0 -> "Normal"
+    bmi < 30.0 -> "Over"
+    else -> "Obese"
 }

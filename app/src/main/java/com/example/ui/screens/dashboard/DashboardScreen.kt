@@ -15,17 +15,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -42,32 +45,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.database.FoodLogEntity
 import com.example.data.database.NutritionGoalEntity
 import com.example.ui.components.AiConfirmationDialog
-import com.example.ui.screens.inventory.NutritionLabelScannerDialog
+import com.example.ui.components.DashboardAiAnalysingCard
+import com.example.ui.components.DashboardAiLoggedItems
+import com.example.ui.components.DashboardFoodSkeleton
+import com.example.ui.components.DashboardStatsSkeleton
+import com.example.ui.components.EditFoodLogDialog
+import com.example.ui.components.EmptyState
+import com.example.ui.components.ScannedFoodDialog
 import com.example.ui.components.ScreenshotAiInputBar
 import com.example.ui.components.ScreenshotCalorieGoalWarningBanner
 import com.example.ui.components.ScreenshotCaloriesAndMacrosCard
 import com.example.ui.components.ScreenshotFoodLogGroupCard
 import com.example.ui.components.ScreenshotTopHeader
-import com.example.ui.components.ScreenshotWaterCard
 import com.example.ui.components.ScreenshotWeekCalendarStrip
-import java.time.LocalDate
-
+import com.example.ui.components.SectionHeader
+import com.example.ui.components.WaterCardSkeleton
+import com.example.ui.screens.inventory.FoodEditDialog
+import com.example.ui.screens.inventory.NutritionLabelScannerDialog
 import com.example.ui.theme.BackgroundDark
-import com.example.ui.theme.PrimaryGreen
+import com.example.ui.theme.ClassicRed
+import com.example.ui.theme.ErrorRed
 import com.example.ui.theme.ProgressCyanBlue
-import com.example.ui.theme.SurfaceBorder
 import com.example.ui.theme.SurfaceDark
+import com.example.ui.theme.SurfaceBorder
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-
+import java.time.LocalDate
 import com.example.ui.components.AnimatedWaterCard
 
 @Composable
@@ -84,12 +94,21 @@ fun DashboardScreen(
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val goals by viewModel.goals.collectAsStateWithLifecycle()
     val aiIsLoading by viewModel.aiIsLoading.collectAsStateWithLifecycle()
+    val aiStage by viewModel.aiStage.collectAsStateWithLifecycle()
     val aiParseResult by viewModel.aiParseResult.collectAsStateWithLifecycle()
+    val aiFailure by viewModel.aiFailure.collectAsStateWithLifecycle()
+    val aiLoggedSummary by viewModel.aiLoggedSummary.collectAsStateWithLifecycle()
+    val canGoPreviousWeek by viewModel.canGoPreviousWeek.collectAsStateWithLifecycle()
+    val canGoNextWeek by viewModel.canGoNextWeek.collectAsStateWithLifecycle()
     val feedbackMessage by viewModel.userFeedbackMessage.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var editingLog by remember { mutableStateOf<FoodLogEntity?>(null) }
     var showCameraDialog by remember { mutableStateOf(false) }
+    var scannedFood by remember { mutableStateOf<com.example.data.database.FoodEntity?>(null) }
+    var editingScannedFood by remember { mutableStateOf<com.example.data.database.FoodEntity?>(null) }
+
+    val settingsLoaded = appSettings != null
 
     LaunchedEffect(feedbackMessage) {
         feedbackMessage?.let {
@@ -98,9 +117,18 @@ fun DashboardScreen(
         }
     }
 
+    // While the AI result rows are still typing themselves in, hide the real
+    // log rows they represent. Dismissing the result hands them over to the
+    // normal timeline, so the same nutrition is never shown twice.
+    val visibleLogs = remember(summary.foodLogs, aiLoggedSummary) {
+        val hiddenIds = aiLoggedSummary?.logIds.orEmpty()
+        if (hiddenIds.isEmpty()) summary.foodLogs
+        else summary.foodLogs.filterNot { it.id in hiddenIds }
+    }
+
     // Group logs by originalPrompt (or meal if no prompt)
-    val groupedMeals = remember(summary.foodLogs) {
-        summary.foodLogs.groupBy {
+    val groupedMeals = remember(visibleLogs) {
+        visibleLogs.groupBy {
             if (it.originalPrompt.isNotBlank()) it.originalPrompt else "Meal (${it.mealType})"
         }
     }
@@ -138,7 +166,7 @@ fun DashboardScreen(
                 )
             }
 
-            // 2. Week Calendar Strip (Sun 1 ... Sat 7) with previous / next week
+            // 2. Week Calendar Strip (Sun 1 ... Sat 7) with bounded previous / next week
             val startDate = appSettings?.startDate?.let { LocalDate.parse(it) }
             item {
                 ScreenshotWeekCalendarStrip(
@@ -147,6 +175,8 @@ fun DashboardScreen(
                     useStartDate = appSettings?.useStartDate == true,
                     blockBeforeStartDate = appSettings?.blockBeforeStartDate == true,
                     blockAfterToday = appSettings?.blockAfterToday == true,
+                    canGoPreviousWeek = canGoPreviousWeek,
+                    canGoNextWeek = canGoNextWeek,
                     weekSummaries = weekSummaries,
                     onSelectDate = { viewModel.setSelectedDate(it) },
                     onPreviousWeek = { viewModel.previousWeek() },
@@ -167,90 +197,122 @@ fun DashboardScreen(
                 goals?.fatGoal != 65.0
             val showOnboardingWarning = !goalsFilled || !targetsFilled
 
-            if (!isWarningDismissed && showOnboardingWarning) {
+            if (!settingsLoaded) {
                 item {
-                    ScreenshotCalorieGoalWarningBanner(
-                        goals = goals ?: NutritionGoalEntity(),
-                        onTap = onNavigateToSettings,
-                        onDismiss = { viewModel.dismissGoalWarning() }
-                    )
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        DashboardStatsSkeleton()
+                    }
                 }
-            }
-
-            // 4. Main Combined Calories & Macros Card
-            item {
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    ScreenshotCaloriesAndMacrosCard(
-                        summary = summary,
-                        exerciseCalories = 0
-                    )
-                }
-            }
-
-            // 5. Water Card (Fluid Animated Wave Progress)
-            item {
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    AnimatedWaterCard(
-                        waterConsumedMl = summary.totalWaterMl,
-                        waterGoalMl = summary.waterGoalMl,
-                        cupSize1Ml = appSettings?.cupSize1Ml ?: 250,
-                        cupSize2Ml = appSettings?.cupSize2Ml ?: 500,
-                        onAddCup1 = { viewModel.addWaterCupSize1() },
-                        onRemoveCup = { viewModel.removeWaterCup() },
-                        onAddCup2 = { viewModel.addWaterCupSize2() }
-                    )
-                }
-            }
-
-            // 6. Food Log History Section
-            if (summary.foodLogs.isEmpty()) {
                 item {
-                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                            shape = RoundedCornerShape(20.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, SurfaceBorder)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Restaurant,
-                                    contentDescription = null,
-                                    tint = TextMuted,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "No foods logged for this date",
-                                    style = MaterialTheme.typography.titleSmall.copy(color = TextPrimary, fontWeight = FontWeight.Bold)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Type e.g. \"46g paneer\" in the bottom bar to log!",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                                )
-                            }
-                        }
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        WaterCardSkeleton()
+                    }
+                }
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        DashboardFoodSkeleton(rows = 2)
                     }
                 }
             } else {
-                groupedMeals.forEach { (_, mealLogs) ->
+                if (!isWarningDismissed && showOnboardingWarning) {
+                    item {
+                        ScreenshotCalorieGoalWarningBanner(
+                            goals = goals ?: NutritionGoalEntity(),
+                            onTap = onNavigateToSettings,
+                            onDismiss = { viewModel.dismissGoalWarning() }
+                        )
+                    }
+                }
+
+                // 4. Primary statistics: calories and macros, directly on the background.
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        ScreenshotCaloriesAndMacrosCard(
+                            summary = summary,
+                            exerciseCalories = 0
+                        )
+                    }
+                }
+
+                // 5. Water (animated wave vessel preserved, compact presentation).
+                item {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        AnimatedWaterCard(
+                            waterConsumedMl = summary.totalWaterMl,
+                            waterGoalMl = summary.waterGoalMl,
+                            cupSize1Ml = appSettings?.cupSize1Ml ?: 250,
+                            cupSize2Ml = appSettings?.cupSize2Ml ?: 500,
+                            onAddCup1 = { viewModel.addWaterCupSize1() },
+                            onRemoveCup = { viewModel.removeWaterCup() },
+                            onAddCup2 = { viewModel.addWaterCupSize2() }
+                        )
+                    }
+                }
+            }
+
+            // 6. Immediate AI skeleton, shaped like the food rows it will become.
+            if (aiIsLoading) {
+                item {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        DashboardAiAnalysingCard(
+                            stage = aiStage ?: com.example.ui.screens.dashboard.AiProcessingStage.ANALYSING,
+                            onCancel = { viewModel.cancelAiRequest() }
+                        )
+                    }
+                }
+            }
+
+            // 7. Real-AI result writes itself into food-row geometry (no popup).
+            aiLoggedSummary?.let { logged ->
+                if (!aiIsLoading) {
+                    item {
+                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                            DashboardAiLoggedItems(
+                                summary = logged,
+                                onDismiss = { viewModel.dismissAiLoggedSummary() }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 8. Food log history
+            if (settingsLoaded) {
+                if (visibleLogs.isEmpty() && !aiIsLoading && aiLoggedSummary == null) {
                     item {
                         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                            ScreenshotFoodLogGroupCard(
-                                logs = mealLogs,
-                                goalCalories = summary.caloriesGoal,
-                                goalCarbs = summary.carbsGoal,
-                                goalProtein = summary.proteinGoal,
-                                goalFat = summary.fatGoal,
-                                onEditLog = { editingLog = it },
-                                onDeleteLog = { viewModel.deleteFoodLog(it) }
+                            EmptyState(
+                                icon = Icons.Default.Restaurant,
+                                title = "Nothing logged yet",
+                                message = "Describe what you ate in the bar below to add it to this day."
                             )
+                        }
+                    }
+                } else if (visibleLogs.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = "Today's meals",
+                            supportingText = "Tap an item to edit it",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
+                    }
+                    groupedMeals.forEach { (groupKey, mealLogs) ->
+                        item(key = "meal_$groupKey") {
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                                    .animateItem()
+                            ) {
+                                ScreenshotFoodLogGroupCard(
+                                    logs = mealLogs,
+                                    goalCalories = summary.caloriesGoal,
+                                    goalCarbs = summary.carbsGoal,
+                                    goalProtein = summary.proteinGoal,
+                                    goalFat = summary.fatGoal,
+                                    onEditLog = { editingLog = it },
+                                    onDeleteLog = { viewModel.deleteFoodLog(it) }
+                                )
+                            }
                         }
                     }
                 }
@@ -262,7 +324,7 @@ fun DashboardScreen(
         }
     }
 
-    // AI Parse Confirmation Modal
+    // Local Smart Engine is the only provider that asks for confirmation.
     aiParseResult?.let { result ->
         AiConfirmationDialog(
             parseResult = result,
@@ -274,66 +336,206 @@ fun DashboardScreen(
         )
     }
 
-    // Edit Quantity Dialog
-    editingLog?.let { logToEdit ->
-        var editQtyText by remember { mutableStateOf("${logToEdit.quantity}") }
-        AlertDialog(
-            onDismissRequest = { editingLog = null },
-            title = {
-                Text(
-                    text = "Edit ${logToEdit.foodNameSnapshot}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
-                )
-            },
-            text = {
-                Column {
-                    Text(
-                        text = "Current serving unit: ${logToEdit.servingUnit}",
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = editQtyText,
-                        onValueChange = { editQtyText = it },
-                        label = { Text("Quantity (${logToEdit.servingUnit})") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("edit_quantity_input")
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val newQty = editQtyText.toDoubleOrNull()
-                        if (newQty != null && newQty > 0.0) {
-                            viewModel.updateFoodLogQuantity(logToEdit, newQty)
-                        }
-                        editingLog = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = ProgressCyanBlue, contentColor = Color.White),
-                    modifier = Modifier.testTag("save_edit_quantity_button")
-                ) {
-                    Text("Save")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { editingLog = null }) {
-                    Text("Cancel", color = TextMuted)
-                }
-            },
-            containerColor = SurfaceDark
+    // AI failure dialog: retry, or explicitly pick another configured provider.
+    aiFailure?.let { failure ->
+        AiFailureDialog(
+            failure = failure,
+            onRetry = { viewModel.retryFailedPrompt() },
+            onSwitchAndRetry = { providerId -> viewModel.switchProviderAndRetry(providerId) },
+            onDismiss = { viewModel.dismissAiFailure() }
         )
     }
 
-    // Camera Scan Dialog
-    if (showCameraDialog) {
-        NutritionLabelScannerDialog(
-            onDismiss = { showCameraDialog = false },
-            onExtracted = { scannedFood ->
-                showCameraDialog = false
-                viewModel.onSendAiPrompt("I ate ${scannedFood.name}")
+    // Full dashboard entry editor (name, brand, meal, quantity, unit, macros).
+    editingLog?.let { logToEdit ->
+        EditFoodLogDialog(
+            log = logToEdit,
+            matchedFood = inventory.firstOrNull { it.id == logToEdit.foodId },
+            onDismiss = { editingLog = null },
+            onSave = { updatedLog ->
+                viewModel.updateFoodLogEntry(updatedLog)
+                editingLog = null
             }
         )
     }
+
+    // Label scan from the dashboard: review the extracted food before saving.
+    if (showCameraDialog) {
+        NutritionLabelScannerDialog(
+            onDismiss = { showCameraDialog = false },
+            onExtracted = { food ->
+                showCameraDialog = false
+                scannedFood = food
+            },
+            scanLabel = viewModel::scanNutritionLabel
+        )
+    }
+
+    scannedFood?.let { foodToReview ->
+        ScannedFoodDialog(
+            food = foodToReview,
+            onEdit = {
+                scannedFood = null
+                editingScannedFood = foodToReview
+            },
+            onSave = {
+                viewModel.saveScannedFoodAndLog(foodToReview)
+                scannedFood = null
+            },
+            onDismiss = { scannedFood = null },
+            titleOverride = "Scanned food",
+            saveLabel = "Add to inventory & log"
+        )
+    }
+
+    // Editing the scanned food before it is saved.
+    editingScannedFood?.let { foodToEdit ->
+        FoodEditDialog(
+            food = foodToEdit,
+            onDismiss = { editingScannedFood = null },
+            onSave = { reviewedFood ->
+                viewModel.saveScannedFoodAndLog(reviewedFood)
+                editingScannedFood = null
+            },
+            titleOverride = "Edit scanned food",
+            saveLabel = "Add to inventory & log"
+        )
+    }
+}
+
+@Composable
+private fun AiFailureDialog(
+    failure: AiFailureState,
+    onRetry: () -> Unit,
+    onSwitchAndRetry: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val initialProvider = remember(failure) {
+        failure.providerOptions
+            .filter { it.id != "LOCAL" }
+            .firstOrNull { !failure.providerUsed.startsWith(it.label.substringBefore(" (")) }
+            ?.id
+            ?: "LOCAL"
+    }
+    var selectedProviderId by remember(failure) { mutableStateOf(initialProvider) }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    val selectedLabel = failure.providerOptions
+        .firstOrNull { it.id == selectedProviderId }
+        ?.label
+        ?: "Local Smart Engine"
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceDark,
+        modifier = Modifier.testTag("ai_failure_dialog"),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = ErrorRed,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    text = "AI request failed",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = failure.message,
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = "Used: ${failure.providerUsed}",
+                    color = TextMuted,
+                    style = MaterialTheme.typography.labelSmall
+                )
+
+                if (failure.canChooseProvider) {
+                    Text(
+                        text = "Switch to another configured provider:",
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Box {
+                        OutlinedButton(
+                            onClick = { dropdownExpanded = true },
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                text = selectedLabel,
+                                color = TextPrimary,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                tint = TextMuted
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = dropdownExpanded,
+                            onDismissRequest = { dropdownExpanded = false },
+                            modifier = Modifier.background(SurfaceDark)
+                        ) {
+                            failure.providerOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = option.label,
+                                            color = if (option.id == selectedProviderId) ClassicRed else TextPrimary
+                                        )
+                                    },
+                                    onClick = {
+                                        selectedProviderId = option.id
+                                        dropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Only this provider is configured. Retry, or continue with the Local Smart Engine — no silent fallback happens.",
+                        color = TextMuted,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onRetry, modifier = Modifier.testTag("ai_failure_retry")) {
+                    Text("Retry", color = TextSecondary)
+                }
+                Button(
+                    onClick = {
+                        onSwitchAndRetry(if (failure.canChooseProvider) selectedProviderId else "LOCAL")
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ClassicRed,
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier.testTag("ai_failure_switch")
+                ) {
+                    Text(if (failure.canChooseProvider) "Switch & Retry" else "Use Local Engine")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextMuted)
+            }
+        }
+    )
 }

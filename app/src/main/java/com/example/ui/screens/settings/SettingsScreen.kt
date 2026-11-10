@@ -71,6 +71,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -86,10 +87,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
 import com.example.data.database.AppSettingsEntity
 import com.example.data.database.NutritionGoalEntity
+import com.example.util.ApiKeyUtils
+import com.example.ui.components.SectionHeader
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.ClassicRed
 import com.example.ui.theme.FlameOrange
-import com.example.ui.theme.PrimaryGreen
+import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.ProgressCyanBlue
 import com.example.ui.theme.SurfaceBorder
 import com.example.ui.theme.SurfaceDark
@@ -134,6 +137,26 @@ val AVAILABLE_AI_MODELS = listOf(
         badgeColor = Color(0xFF76B900)
     ),
     AiModelItem(
+        id = "openai_gpt_4o_mini",
+        provider = "OPENAI",
+        modelName = "gpt-4o-mini",
+        title = "OpenAI — GPT-4o mini",
+        subtitle = "Reliable text logging (photo scanning needs Groq)",
+        requiresApiKey = true,
+        badgeLabel = "OpenAI",
+        badgeColor = Color(0xFF10A37F)
+    ),
+    AiModelItem(
+        id = "groq_qwen_3_8_27b",
+        provider = "GROQ",
+        modelName = "qwen/qwen3.8-27b",
+        title = "Groq — Qwen 3.8 27B",
+        subtitle = "Fast multimodal: text logging + photo/label scanning",
+        requiresApiKey = true,
+        badgeLabel = "Groq",
+        badgeColor = Color(0xFFB61C1C)
+    ),
+    AiModelItem(
         id = "local_offline",
         provider = "LOCAL",
         modelName = "local-smart",
@@ -141,7 +164,7 @@ val AVAILABLE_AI_MODELS = listOf(
         subtitle = "100% on-device & private. No API key required",
         requiresApiKey = false,
         badgeLabel = "Offline",
-        badgeColor = PrimaryGreen
+        badgeColor = SuccessGreen
     )
 )
 
@@ -159,6 +182,7 @@ fun SettingsScreen(
     val isTesting by viewModel.isTesting.collectAsStateWithLifecycle()
     val saveResult by viewModel.saveResult.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val clipboardManager = LocalClipboardManager.current
 
     val goals = currentGoals ?: NutritionGoalEntity()
     val appSettings = currentAppSettings ?: AppSettingsEntity()
@@ -177,6 +201,8 @@ fun SettingsScreen(
                 ?: AVAILABLE_AI_MODELS.find { it.provider == "NVIDIA_NIM" } ?: AVAILABLE_AI_MODELS[0]
             "OPENAI" -> AVAILABLE_AI_MODELS.find { it.provider == "OPENAI" && it.modelName == appSettings.openaiModel }
                 ?: AVAILABLE_AI_MODELS.find { it.provider == "OPENAI" } ?: AVAILABLE_AI_MODELS[0]
+            "GROQ" -> AVAILABLE_AI_MODELS.find { it.provider == "GROQ" && it.modelName == appSettings.groqModel }
+                ?: AVAILABLE_AI_MODELS.find { it.provider == "GROQ" } ?: AVAILABLE_AI_MODELS[0]
             "LOCAL" -> AVAILABLE_AI_MODELS.find { it.provider == "LOCAL" } ?: AVAILABLE_AI_MODELS[0]
             else -> AVAILABLE_AI_MODELS.find { it.provider == "LOCAL" } ?: AVAILABLE_AI_MODELS[0]
         }
@@ -190,10 +216,12 @@ fun SettingsScreen(
     var nvidiaApiKey by remember(appSettings) { mutableStateOf(appSettings.nvidiaApiKey.trim()) }
     var nvidiaBaseUrl by remember(appSettings) { mutableStateOf(appSettings.nvidiaBaseUrl.trim()) }
     var openaiApiKey by remember(appSettings) { mutableStateOf(appSettings.openaiApiKey.trim()) }
+    var groqApiKey by remember(appSettings) { mutableStateOf(appSettings.groqApiKey.trim()) }
 
     var showGeminiKey by remember { mutableStateOf(false) }
     var showNvidiaKey by remember { mutableStateOf(false) }
     var showOpenAiKey by remember { mutableStateOf(false) }
+    var showGroqKey by remember { mutableStateOf(false) }
 
     // Goal targets
     var calTarget by remember(goals) { mutableStateOf("${goals.caloriesGoal.toInt()}") }
@@ -235,7 +263,7 @@ fun SettingsScreen(
     var hasUnsavedChanges by remember { mutableStateOf(false) }
 
     LaunchedEffect(
-        geminiApiKey, nvidiaApiKey, openaiApiKey, nvidiaBaseUrl,
+        geminiApiKey, nvidiaApiKey, openaiApiKey, groqApiKey, nvidiaBaseUrl,
         calTarget, proteinTarget, carbsTarget, fatTarget, waterTarget,
         cupSize1Target, cupSize2Target,
         nameText, sexValue, weightText, targetWeightText, heightText, ageText, activityLevel,
@@ -243,7 +271,7 @@ fun SettingsScreen(
     ) {
         hasUnsavedChanges = viewModel.hasUnsavedChanges(
             currentGoals, currentAppSettings,
-            geminiApiKey, nvidiaApiKey, openaiApiKey, nvidiaBaseUrl,
+            geminiApiKey, nvidiaApiKey, openaiApiKey, groqApiKey, nvidiaBaseUrl,
             calTarget, proteinTarget, carbsTarget, fatTarget, waterTarget,
             cupSize1Target, cupSize2Target,
             nameText, sexValue, weightText, targetWeightText, heightText, ageText, activityLevel,
@@ -257,6 +285,7 @@ fun SettingsScreen(
         nvidiaApiKey = appSettings.nvidiaApiKey.trim()
         nvidiaBaseUrl = appSettings.nvidiaBaseUrl.trim()
         openaiApiKey = appSettings.openaiApiKey.trim()
+        groqApiKey = appSettings.groqApiKey.trim()
 
         calTarget = "${goals.caloriesGoal.toInt()}"
         proteinTarget = "${goals.proteinGoal.toInt()}"
@@ -346,99 +375,43 @@ fun SettingsScreen(
             .fillMaxSize()
             .testTag("settings_screen"),
         containerColor = BackgroundDark,
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header
-            item {
-                Text(
-                    text = "SETTINGS & INTEGRATIONS",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = PrimaryGreen,
-                        letterSpacing = 1.2.sp
-                    )
-                )
-                Text(
-                    text = "AI Model & General Settings",
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                )
-            }
-
             // =====================================================================
-            // 1. AI MODEL & API KEY CARD
+            // 1. AI MODEL & API KEY
             // =====================================================================
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = "AI Model Details",
-                                    tint = ProgressCyanBlue,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "AI Model & API Key",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
-                                    )
-                                )
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(selectedModelOption.badgeColor.copy(alpha = 0.2f))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = selectedModelOption.badgeLabel,
-                                    color = selectedModelOption.badgeColor,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
-                            }
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    SectionHeader(
+                        title = "AI model",
+                        supportingText = "The engine that parses your food descriptions.",
+                        trailing = {
+                            Text(
+                                text = selectedModelOption.badgeLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = selectedModelOption.badgeColor
+                            )
                         }
-
-                        Text(
-                            text = "Select your AI engine and enter your API key. When you log meals, the AI extracts the exact proportional multiplier and matches inventory foods.",
-                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
-                        )
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
 
                         // AI MODEL DROPDOWN
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = "SELECT AI MODEL",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = TextMuted,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp
-                                ),
+                                text = "ENGINE",
+                                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.8.sp),
+                                color = TextMuted,
                                 modifier = Modifier.padding(bottom = 6.dp)
                             )
 
@@ -446,11 +419,11 @@ fun SettingsScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(Color(0xFF13171F))
-                                        .border(1.dp, ProgressCyanBlue.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(SurfaceDark)
+                                        .border(1.dp, SurfaceBorder.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
                                         .clickable { isModelDropdownExpanded = true }
-                                        .padding(14.dp)
+                                        .padding(12.dp)
                                         .testTag("ai_model_dropdown_button"),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
@@ -492,9 +465,9 @@ fun SettingsScreen(
 
                                     Icon(
                                         imageVector = if (isModelDropdownExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                                        contentDescription = "Dropdown",
-                                        tint = ProgressCyanBlue,
-                                        modifier = Modifier.size(28.dp)
+                                        contentDescription = "Choose engine",
+                                        tint = TextMuted,
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
 
@@ -518,8 +491,8 @@ fun SettingsScreen(
                                                         Text(
                                                             text = modelItem.title,
                                                             style = MaterialTheme.typography.bodyMedium.copy(
-                                                                color = if (isCurrent) ProgressCyanBlue else TextPrimary,
-                                                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
+                                                                color = if (isCurrent) ClassicRed else TextPrimary,
+                                                                fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
                                                             )
                                                         )
                                                         Spacer(modifier = Modifier.width(8.dp))
@@ -596,7 +569,7 @@ fun SettingsScreen(
                                                     Icon(
                                                         imageVector = Icons.Default.Visibility,
                                                         contentDescription = "Toggle key visibility",
-                                                        tint = PrimaryGreen,
+                                                        tint = ClassicRed,
                                                         modifier = Modifier.size(20.dp)
                                                     )
                                                 }
@@ -608,18 +581,11 @@ fun SettingsScreen(
                                             singleLine = true
                                         )
 
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(Color(0xFF13171F))
-                                                .padding(10.dp)
-                                        ) {
-                                            Text(
-                                                text = "Google AI Studio API key. Model: ${selectedModelOption.modelName}.",
-                                                style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 11.sp)
-                                            )
-                                        }
+                                        Text(
+                                            text = "Google AI Studio API key. Model: ${selectedModelOption.modelName}.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextMuted
+                                        )
                                     }
 
                                     "NVIDIA_NIM" -> {
@@ -646,18 +612,11 @@ fun SettingsScreen(
                                             singleLine = true
                                         )
 
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(Color(0xFF13171F))
-                                                .padding(10.dp)
-                                        ) {
-                                            Text(
-                                                text = "NVIDIA NIM API key from build.nvidia.com. Model: ${selectedModelOption.modelName}.",
-                                                style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 11.sp)
-                                            )
-                                        }
+                                        Text(
+                                            text = "NVIDIA NIM API key from build.nvidia.com. Model: ${selectedModelOption.modelName}.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextMuted
+                                        )
                                     }
 
                                     "OPENAI" -> {
@@ -674,18 +633,81 @@ fun SettingsScreen(
                                             singleLine = true
                                         )
 
-                                        Box(
+                                        Text(
+                                            text = "OpenAI API key from platform.openai.com. Model: ${selectedModelOption.modelName}.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextMuted
+                                        )
+                                    }
+
+                                    "GROQ" -> {
+                                        OutlinedTextField(
+                                            value = groqApiKey,
+                                            onValueChange = { groqApiKey = it },
+                                            label = { Text("Groq API Key") },
+                                            placeholder = { Text("gsk_...") },
+                                            visualTransformation = if (showGroqKey) VisualTransformation.None else PasswordVisualTransformation(),
+                                            keyboardOptions = KeyboardOptions(
+                                                keyboardType = KeyboardType.Password,
+                                                autoCorrectEnabled = false
+                                            ),
+                                            trailingIcon = {
+                                                IconButton(onClick = { showGroqKey = !showGroqKey }) {
+                                                    Icon(
+                                                        imageVector = if (showGroqKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                        contentDescription = "Toggle key visibility",
+                                                        tint = ClassicRed,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            },
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(Color(0xFF13171F))
-                                                .padding(10.dp)
+                                                .testTag("groq_api_key_input"),
+                                            colors = customTextFieldColors(),
+                                            singleLine = true
+                                        )
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(
-                                                text = "OpenAI API key from platform.openai.com. Model: ${selectedModelOption.modelName}.",
-                                                style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 11.sp)
-                                            )
+                                            if (groqApiKey.isNotBlank()) {
+                                                val keyIssue = ApiKeyUtils.groqKeyIssue(groqApiKey)
+                                                Text(
+                                                    text = keyIssue
+                                                        ?: "Key format looks good (${ApiKeyUtils.normalize(groqApiKey).length} characters).",
+                                                    color = if (keyIssue == null) SuccessGreen else ClassicRed,
+                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            } else {
+                                                Spacer(modifier = Modifier.weight(1f))
+                                            }
+                                            TextButton(
+                                                onClick = {
+                                                    val pasted = clipboardManager.getText()?.text.orEmpty()
+                                                    if (pasted.isNotBlank()) {
+                                                        groqApiKey = ApiKeyUtils.normalize(pasted)
+                                                    }
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Paste",
+                                                    color = ClassicRed,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp
+                                                )
+                                            }
                                         }
+
+                                        Text(
+                                            text = "Create a key at console.groq.com/keys (it starts with gsk_). Model: ${selectedModelOption.modelName}. Supports text logging and camera/label scanning.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextMuted
+                                        )
                                     }
                                 }
                             }
@@ -702,7 +724,9 @@ fun SettingsScreen(
                                     nvidiaModel = if (selectedModelOption.provider == "NVIDIA_NIM") selectedModelOption.modelName else appSettings.nvidiaModel,
                                     nvidiaBaseUrl = if (selectedModelOption.provider == "NVIDIA_NIM") nvidiaBaseUrl.trim().ifBlank { "https://integrate.api.nvidia.com/v1" } else appSettings.nvidiaBaseUrl,
                                     openaiApiKey = if (selectedModelOption.provider == "OPENAI") openaiApiKey.trim() else appSettings.openaiApiKey,
-                                    openaiModel = if (selectedModelOption.provider == "OPENAI") selectedModelOption.modelName else appSettings.openaiModel
+                                    openaiModel = if (selectedModelOption.provider == "OPENAI") selectedModelOption.modelName else appSettings.openaiModel,
+                                    groqApiKey = if (selectedModelOption.provider == "GROQ") groqApiKey.trim() else appSettings.groqApiKey,
+                                    groqModel = if (selectedModelOption.provider == "GROQ") selectedModelOption.modelName else appSettings.groqModel
                                 )
                                 viewModel.saveApiSettings(updatedSettings)
                             },
@@ -711,7 +735,7 @@ fun SettingsScreen(
                                 .height(48.dp)
                                 .testTag("save_api_button"),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = ProgressCyanBlue,
+                                containerColor = ClassicRed,
                                 contentColor = Color.White
                             ),
                             shape = RoundedCornerShape(12.dp)
@@ -751,69 +775,51 @@ fun SettingsScreen(
             // 2. DAILY NUTRITIONAL TARGETS
             // =====================================================================
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        modifier = Modifier.padding(18.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Flag, contentDescription = null, tint = PrimaryGreen, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Daily Nutritional Targets",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
+                        SectionHeader(
+                            title = "Daily targets",
+                            supportingText = "Calories, macros and water for a normal day.",
+                            trailing = {
+                                // Autofill from the profile fields below.
+                                Button(
+                                    onClick = {
+                                        val age = ageText.toIntOrNull()
+                                        val weightKg = weightText.toDoubleOrNull()
+                                        val targetWeightKg = targetWeightText.toDoubleOrNull()
+                                        val heightCm = heightText.toDoubleOrNull()
+                                        val result = viewModel.calculateNutrition(
+                                            age = age,
+                                            sex = sexValue,
+                                            currentWeightKg = weightKg,
+                                            targetWeightKg = targetWeightKg,
+                                            heightCm = heightCm,
+                                            activityLevel = activityLevel
+                                        )
+                                        if (result != null) {
+                                            calTarget = result.calories.toString()
+                                            proteinTarget = result.protein.toString()
+                                            carbsTarget = result.carbs.toString()
+                                            fatTarget = result.fat.toString()
+                                        }
+                                    },
+                                    modifier = Modifier.height(32.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = SurfaceBorder,
+                                        contentColor = TextSecondary
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                ) {
+                                    Text(
+                                        text = "Autofill",
+                                        style = MaterialTheme.typography.labelSmall
                                     )
-                                )
+                                }
                             }
-
-                            // Autofill button
-                            Button(
-                                onClick = {
-                                    val age = ageText.toIntOrNull()
-                                    val weightKg = weightText.toDoubleOrNull()
-                                    val targetWeightKg = targetWeightText.toDoubleOrNull()
-                                    val heightCm = heightText.toDoubleOrNull()
-                                    val result = viewModel.calculateNutrition(
-                                        age = age,
-                                        sex = sexValue,
-                                        currentWeightKg = weightKg,
-                                        targetWeightKg = targetWeightKg,
-                                        heightCm = heightCm,
-                                        activityLevel = activityLevel
-                                    )
-                                    if (result != null) {
-                                        calTarget = result.calories.toString()
-                                        proteinTarget = result.protein.toString()
-                                        carbsTarget = result.carbs.toString()
-                                        fatTarget = result.fat.toString()
-                                    }
-                                },
-                                modifier = Modifier.height(40.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = SurfaceBorder,
-                                    contentColor = TextSecondary
-                                ),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Text(
-                                    text = "Autofill",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        }
+                        )
 
                         OutlinedTextField(
                             value = calTarget,
@@ -875,31 +881,13 @@ fun SettingsScreen(
             // 3. WATER CUP SIZES
             // =====================================================================
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocalDrink, contentDescription = null, tint = WaterCyan, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Water Cup Sizes",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                )
-                            )
-                        }
-
-                        Text(
-                            text = "Set your two preferred cup sizes. These appear as quick-add buttons in Water Intake.",
-                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
+                        SectionHeader(
+                            title = "Water cup sizes",
+                            supportingText = "Quick-add amounts shown on the dashboard."
                         )
 
                         Row(
@@ -938,40 +926,26 @@ fun SettingsScreen(
                 var showStartDatePicker by remember { mutableStateOf(false) }
 
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarMonth,
-                            contentDescription = "Start date",
-                            tint = PrimaryGreen,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Use Start Date",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                    SectionHeader(
+                        title = "Tracking dates",
+                        supportingText = "Control which days can be edited.",
+                        trailing = {
+                            androidx.compose.material3.Switch(
+                                checked = useStartDateLocal,
+                                onCheckedChange = { checked ->
+                                    useStartDateLocal = checked
+                                },
+                                colors = androidx.compose.material3.SwitchDefaults.colors(
+                                    checkedTrackColor = ClassicRed,
+                                    checkedThumbColor = Color.White,
+                                    uncheckedTrackColor = SurfaceBorder,
+                                    uncheckedThumbColor = TextMuted
+                                )
                             )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        androidx.compose.material3.Switch(
-                            checked = useStartDateLocal,
-                            onCheckedChange = { checked ->
-                                useStartDateLocal = checked
-                            },
-                            colors = androidx.compose.material3.SwitchDefaults.colors(
-                                checkedTrackColor = PrimaryGreen,
-                                checkedThumbColor = Color.White,
-                                uncheckedTrackColor = SurfaceBorder,
-                                uncheckedThumbColor = TextMuted
-                            )
-                        )
-                    }
+                        }
+                    )
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
                         text = if (!useStartDateLocal) {
@@ -981,7 +955,8 @@ fun SettingsScreen(
                         } else {
                             "Tracking starts from $startDateLocal. Days before this date are untrackable."
                         },
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -994,10 +969,13 @@ fun SettingsScreen(
                             Button(
                                 onClick = { showStartDatePicker = true },
                                 modifier = Modifier.weight(1f).height(44.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = ProgressCyanBlue, contentColor = Color.White),
-                                shape = RoundedCornerShape(12.dp)
+                                colors = ButtonDefaults.buttonColors(containerColor = ClassicRed, contentColor = Color.White),
+                                shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text(if (startDateLocal == null) "Set Start Date" else "Change Start Date")
+                                Text(
+                                    text = if (startDateLocal == null) "Set start date" else "Change start date",
+                                    style = MaterialTheme.typography.labelLarge
+                                )
                             }
 
                             if (startDateLocal != null) {
@@ -1024,7 +1002,7 @@ fun SettingsScreen(
                                     blockBeforeStartLocal = checked
                                 },
                                 colors = androidx.compose.material3.CheckboxDefaults.colors(
-                                    checkedColor = PrimaryGreen,
+                                    checkedColor = ClassicRed,
                                     uncheckedColor = SurfaceBorder
                                 )
                             )
@@ -1051,7 +1029,7 @@ fun SettingsScreen(
                                 blockAfterTodayLocal = checked
                             },
                             colors = androidx.compose.material3.CheckboxDefaults.colors(
-                                checkedColor = PrimaryGreen,
+                                checkedColor = ClassicRed,
                                 uncheckedColor = SurfaceBorder
                             )
                         )
@@ -1082,27 +1060,14 @@ fun SettingsScreen(
             // 5. PROFILE SECTION
             // =====================================================================
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Column(
-                        modifier = Modifier.padding(18.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Person, contentDescription = null, tint = ProgressCyanBlue, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Personal Profile (Optional)",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                )
-                            )
-                        }
+                        SectionHeader(
+                            title = "Profile",
+                            supportingText = "Used to estimate targets. Optional."
+                        )
 
                         OutlinedTextField(
                             value = nameText,
@@ -1164,19 +1129,19 @@ fun SettingsScreen(
                         Box {
                             OutlinedButton(
                                 onClick = { sexMenuExpanded = true },
-                                modifier = Modifier.fillMaxWidth().height(54.dp),
-                                shape = RoundedCornerShape(12.dp)
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(10.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Biological Sex:", color = TextSecondary)
+                                    Text("Sex", color = TextMuted)
                                     Text(
                                         sexValue.ifBlank { "Not set" },
-                                        color = PrimaryGreen,
-                                        fontWeight = FontWeight.Bold
+                                        color = TextPrimary,
+                                        fontWeight = FontWeight.Medium
                                     )
                                 }
                             }
@@ -1201,16 +1166,16 @@ fun SettingsScreen(
                         Box {
                             OutlinedButton(
                                 onClick = { activityMenuExpanded = true },
-                                modifier = Modifier.fillMaxWidth().height(54.dp),
-                                shape = RoundedCornerShape(12.dp)
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(10.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Activity Level:", color = TextSecondary)
-                                    Text(activityLevel, color = PrimaryGreen, fontWeight = FontWeight.Bold)
+                                    Text("Activity", color = TextMuted)
+                                    Text(activityLevel, color = TextPrimary, fontWeight = FontWeight.Medium)
                                 }
                             }
 
@@ -1276,6 +1241,8 @@ fun SettingsScreen(
                                 nvidiaBaseUrl = if (selectedModelOption.provider == "NVIDIA_NIM") nvidiaBaseUrl.trim().ifBlank { "https://integrate.api.nvidia.com/v1" } else appSettings.nvidiaBaseUrl,
                                 openaiApiKey = if (selectedModelOption.provider == "OPENAI") openaiApiKey.trim() else appSettings.openaiApiKey,
                                 openaiModel = if (selectedModelOption.provider == "OPENAI") selectedModelOption.modelName else appSettings.openaiModel,
+                                groqApiKey = if (selectedModelOption.provider == "GROQ") groqApiKey.trim() else appSettings.groqApiKey,
+                                groqModel = if (selectedModelOption.provider == "GROQ") selectedModelOption.modelName else appSettings.groqModel,
                                 cupSize1Ml = cup1,
                                 cupSize2Ml = cup2,
                                 useStartDate = useStartDateLocal,
@@ -1288,13 +1255,13 @@ fun SettingsScreen(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .height(52.dp)
+                            .height(50.dp)
                             .testTag("save_button"),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryGreen,
+                            containerColor = ClassicRed,
                             contentColor = Color.White
                         ),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         if (isTesting) {
                             androidx.compose.foundation.layout.Box(
@@ -1313,12 +1280,10 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Save All",
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.titleSmall
+                                    text = "Save all",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
@@ -1437,6 +1402,8 @@ fun SettingsScreen(
                             nvidiaBaseUrl = if (selectedModelOption.provider == "NVIDIA_NIM") nvidiaBaseUrl.trim().ifBlank { "https://integrate.api.nvidia.com/v1" } else appSettings.nvidiaBaseUrl,
                             openaiApiKey = if (selectedModelOption.provider == "OPENAI") openaiApiKey.trim() else appSettings.openaiApiKey,
                             openaiModel = if (selectedModelOption.provider == "OPENAI") selectedModelOption.modelName else appSettings.openaiModel,
+                            groqApiKey = if (selectedModelOption.provider == "GROQ") groqApiKey.trim() else appSettings.groqApiKey,
+                            groqModel = if (selectedModelOption.provider == "GROQ") selectedModelOption.modelName else appSettings.groqModel,
                             cupSize1Ml = cup1,
                             cupSize2Ml = cup2,
                             useStartDate = useStartDateLocal,
@@ -1447,7 +1414,7 @@ fun SettingsScreen(
 
                         viewModel.saveGeneralSettings(updatedGoals, updatedSettings)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen, contentColor = Color.White),
+                    colors = ButtonDefaults.buttonColors(containerColor = ClassicRed, contentColor = Color.White),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text("Save", fontWeight = FontWeight.Bold)
@@ -1529,7 +1496,7 @@ private fun StartDatePickerDialog(
                         Icon(
                             imageVector = Icons.Default.ChevronLeft,
                             contentDescription = "Previous month",
-                            tint = PrimaryGreen,
+                            tint = TextSecondary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -1556,7 +1523,7 @@ private fun StartDatePickerDialog(
                         Icon(
                             imageVector = Icons.Default.ChevronRight,
                             contentDescription = "Next month",
-                            tint = PrimaryGreen,
+                            tint = TextSecondary,
                             modifier = Modifier.size(20.dp)
                         )
                     }

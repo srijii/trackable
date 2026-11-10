@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
@@ -115,14 +116,12 @@ fun ScreenshotTopHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(start = 8.dp, top = 8.dp, end = 12.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Menu Hamburger
         IconButton(
             onClick = onMenuClick,
-            modifier = Modifier.size(36.dp).testTag("header_menu_button")
+            modifier = Modifier.size(40.dp).testTag("header_menu_button")
         ) {
             Icon(
                 imageVector = Icons.Default.Menu,
@@ -132,65 +131,73 @@ fun ScreenshotTopHeader(
             )
         }
 
-        // Month label (left side of Today dropdown, gray small font)
-        Text(
-            text = selectedDate.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
-            style = MaterialTheme.typography.labelSmall.copy(
-                color = TextSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            )
-        )
+        Spacer(modifier = Modifier.width(4.dp))
 
-        // Center "Today ▾" dropdown
-        Box {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { dropdownExpanded = true }
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                val label = if (selectedDate == LocalDate.now()) "Today" else selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        fontSize = 18.sp
+        Column(modifier = Modifier.weight(1f)) {
+            Box {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { dropdownExpanded = true }
+                        .padding(vertical = 1.dp)
+                ) {
+                    Text(
+                        text = if (selectedDate == LocalDate.now()) "Today"
+                        else selectedDate.format(DateTimeFormatter.ofPattern("EEE, MMM d")),
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = TextPrimary
                     )
-                )
-                Spacer(modifier = Modifier.width(2.dp))
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = "Select Date",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Select Date",
+                        tint = TextMuted,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
 
-            DropdownMenu(
-                expanded = dropdownExpanded,
-                onDismissRequest = { dropdownExpanded = false },
-                modifier = Modifier.background(SurfaceDark)
+                DropdownMenu(
+                    expanded = dropdownExpanded,
+                    onDismissRequest = { dropdownExpanded = false },
+                    modifier = Modifier.background(SurfaceDark)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Today", color = TextPrimary) },
+                        onClick = {
+                            onDateSelect(LocalDate.now())
+                            dropdownExpanded = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Yesterday", color = TextPrimary) },
+                        onClick = {
+                            onDateSelect(LocalDate.now().minusDays(1))
+                            dropdownExpanded = false
+                        }
+                    )
+                }
+            }
+            Text(
+                text = selectedDate.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")),
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted
+            )
+        }
+
+        if (selectedDate != LocalDate.now()) {
+            IconButton(
+                onClick = { onDateSelect(LocalDate.now()) },
+                modifier = Modifier.size(38.dp)
             ) {
-                DropdownMenuItem(
-                    text = { Text("Today", color = TextPrimary) },
-                    onClick = {
-                        onDateSelect(LocalDate.now())
-                        dropdownExpanded = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Yesterday", color = TextPrimary) },
-                    onClick = {
-                        onDateSelect(LocalDate.now().minusDays(1))
-                        dropdownExpanded = false
-                    }
+                Icon(
+                    imageVector = Icons.Default.CalendarToday,
+                    contentDescription = "Jump to today",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(19.dp)
                 )
             }
         }
-
     }
 }
 
@@ -201,17 +208,19 @@ fun ScreenshotTopHeader(
 fun PageHeader(
     title: String,
     onMenuClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    supportingText: String? = null,
+    trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(start = 8.dp, top = 8.dp, end = 16.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(
             onClick = onMenuClick,
-            modifier = Modifier.size(36.dp).testTag("header_menu_button")
+            modifier = Modifier.size(40.dp).testTag("header_menu_button")
         ) {
             Icon(
                 imageVector = Icons.Default.Menu,
@@ -221,16 +230,27 @@ fun PageHeader(
             )
         }
 
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(4.dp))
 
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                fontSize = 18.sp
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineLarge,
+                color = TextPrimary
             )
-        )
+            if (!supportingText.isNullOrBlank()) {
+                Text(
+                    text = supportingText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
+                )
+            }
+        }
+
+        if (trailing != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            trailing()
+        }
     }
 }
 
@@ -244,6 +264,8 @@ fun ScreenshotWeekCalendarStrip(
     useStartDate: Boolean = false,
     blockBeforeStartDate: Boolean = true,
     blockAfterToday: Boolean = true,
+    canGoPreviousWeek: Boolean = true,
+    canGoNextWeek: Boolean = true,
     weekSummaries: List<DailyNutritionSummary> = emptyList(),
     onSelectDate: (LocalDate) -> Unit,
     onPreviousWeek: () -> Unit = {},
@@ -258,34 +280,29 @@ fun ScreenshotWeekCalendarStrip(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            .padding(horizontal = 8.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Previous week
         IconButton(
             onClick = onPreviousWeek,
-            modifier = Modifier.size(36.dp)
+            enabled = canGoPreviousWeek,
+            modifier = Modifier.size(30.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.ChevronLeft,
                 contentDescription = "Previous week",
-                tint = TextPrimary,
-                modifier = Modifier.size(22.dp)
+                tint = if (canGoPreviousWeek) TextSecondary else TextMuted.copy(alpha = 0.3f),
+                modifier = Modifier.size(20.dp)
             )
         }
 
-        // Days
         for (i in 0 until 7) {
             val date = startOfWeek.plusDays(i.toLong())
             val isSelected = date == selectedDate
             val dayName = date.format(DateTimeFormatter.ofPattern("EEE"))
             val dayNum = date.dayOfMonth.toString()
 
-            // Tracking rules based on settings:
-            // - before start date: always grayed + prohibition sign (visual), clickable depends on blockBeforeStartDate
-            // - after today: always grayed + prohibition sign (visual), clickable depends on blockAfterToday
-            // - start date .. today: trackable, color coded by logging status
             val isBeforeStartVisually = useStartDate && startDate != null && date < startDate
             val isFuture = date > today
             val isBeforeStartBlocked = isBeforeStartVisually && blockBeforeStartDate
@@ -298,77 +315,101 @@ fun ScreenshotWeekCalendarStrip(
             val proteinGoal = summary?.proteinGoal ?: 0.0
             val proteinHit = tracked && proteinGoal > 0.0 && summary.totalProtein >= proteinGoal
 
-            // Background: selected + trackable = crimson. Unselectable days never get the
-            // selected red color, even when they happen to be the currently selected date.
-            val pillColor = if (isSelected && trackable) ClassicRed else SurfacePill
-            // Text color: selected + trackable = white, untrackable = gray,
-            // tracked = white, protein goal hit = green
             val dayTextColor = when {
                 isSelected && trackable -> Color.White
-                !trackable -> TextMuted
-                tracked && proteinHit -> SuccessGreen
-                tracked -> Color.White
+                !trackable -> TextMuted.copy(alpha = 0.55f)
+                tracked -> TextPrimary
+                else -> TextSecondary
+            }
+            val weekdayColor = when {
+                isSelected && trackable -> TextPrimary
+                !trackable -> TextMuted.copy(alpha = 0.5f)
+                tracked -> TextSecondary
                 else -> TextMuted
             }
 
-            Box(
+            Column(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxSize()
-                    .padding(horizontal = 3.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(pillColor)
+                    .clip(RoundedCornerShape(10.dp))
                     .clickable(enabled = trackable) { onSelectDate(date) }
-                    .padding(vertical = 8.dp)
-                    .drawWithContent {
-                        drawContent() // draws background + day text
-                        if (showProhibitionSign) {
-                            val size = this.size
-                            val strokePx = 1f.dp.toPx() // thin strikethrough line
-                            val insetPx = 1f.dp.toPx()
-                            // Thin diagonal line from the date's top-left corner to bottom-right corner.
-                            // Only prohibited days draw this line; selectable days stay clean.
-                            drawLine(
-                                start = Offset(insetPx, insetPx),
-                                end = Offset(size.width - insetPx, size.height - insetPx),
-                                color = Color(0xFF9CA3AF),
-                                strokeWidth = strokePx
-                            )
-                        }
-                    }
+                    .padding(vertical = 3.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = dayName,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            color = if (isSelected && trackable) Color.White else dayTextColor,
-                            fontWeight = if (isSelected && trackable) FontWeight.Bold else FontWeight.Normal
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = dayName,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = weekdayColor
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(if (isSelected && trackable) ClassicRed else Color.Transparent)
+                        .drawWithContent {
+                            drawContent()
+                            if (showProhibitionSign) {
+                                val inset = 5.dp.toPx()
+                                drawLine(
+                                    start = Offset(inset, inset),
+                                    end = Offset(size.width - inset, size.height - inset),
+                                    color = TextMuted.copy(alpha = 0.55f),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         text = dayNum,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = dayTextColor,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                             fontSize = 14.sp
-                        )
+                        ),
+                        color = dayTextColor
                     )
+                }
+                Spacer(modifier = Modifier.height(3.dp))
+                // Goal markers: green for protein, blue for water, red when
+                // neither goal was reached.
+                val waterTracked = (summary?.totalWaterMl ?: 0) > 0
+                val waterGoal = summary?.waterGoalMl ?: 0
+                val waterHit = waterTracked && waterGoal > 0 && (summary?.totalWaterMl ?: 0) >= waterGoal
+                val goalDotColors = when {
+                    proteinHit && waterHit -> listOf(SuccessGreen, WaterCyan)
+                    proteinHit -> listOf(SuccessGreen)
+                    waterHit -> listOf(WaterCyan)
+                    tracked || waterTracked -> listOf(ClassicRed)
+                    else -> emptyList()
+                }
+                Row(
+                    modifier = Modifier.height(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    goalDotColors.forEach { dotColor ->
+                        Box(
+                            modifier = Modifier
+                                .size(3.dp)
+                                .clip(CircleShape)
+                                .background(dotColor)
+                        )
+                    }
                 }
             }
         }
 
-        // Next week
         IconButton(
             onClick = onNextWeek,
-            modifier = Modifier.size(36.dp)
+            enabled = canGoNextWeek,
+            modifier = Modifier.size(30.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = "Next week",
-                tint = TextPrimary,
-                modifier = Modifier.size(22.dp)
+                tint = if (canGoNextWeek) TextSecondary else TextMuted.copy(alpha = 0.3f),
+                modifier = Modifier.size(20.dp)
             )
         }
     }
@@ -465,142 +506,106 @@ fun ScreenshotCaloriesAndMacrosCard(
     exerciseCalories: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    val calorieProgress = summary.caloriesProgress
-    val animatedCalProgress by animateFloatAsState(
-        targetValue = calorieProgress,
-        animationSpec = tween(600),
-        label = "cal_prog"
-    )
+    val consumed = summary.totalCalories.toInt()
+    val target = summary.caloriesGoal.toInt()
+    val remaining = target - consumed
+    val isOver = remaining < 0
+    val progress = summary.caloriesProgress
 
-    Card(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("screenshot_calories_macros_card"),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))
+            .testTag("screenshot_calories_macros_card")
     ) {
-        Column(
-            modifier = Modifier.padding(18.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Header: Flame + "Calories"
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.LocalFireDepartment,
-                    contentDescription = "Calories",
-                    tint = FlameOrange,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "CALORIES",
+                style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                color = TextMuted,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "Target ${target} kcal",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted
+            )
+        }
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Text(
+                text = "$consumed",
+                style = MaterialTheme.typography.displayLarge,
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "kcal",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+                modifier = Modifier.padding(bottom = 7.dp)
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "Calories",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
+                    text = if (isOver) "Over target" else "Remaining",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted
                 )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Main Calorie Progress Bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Color(0xFF26303E))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(animatedCalProgress)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(ProgressCyanBlue)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // 3 Column Stats: Food | Exercise | Remaining
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("Food", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp))
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "${summary.totalCalories.toInt()}",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
-                    )
-                }
-
-                Column {
-                    Text("Exercise", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp))
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "$exerciseCalories",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
-                    )
-                }
-
-                Column {
-                    Text("Remaining", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp))
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "${summary.caloriesRemaining.toInt()}",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Macros Header: Donut/Ring + "Macros"
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.DonutLarge,
-                    contentDescription = "Macros",
-                    tint = MacroPink,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Macros",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
+                    text = "${kotlin.math.abs(remaining)} kcal",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (isOver) ClassicRed else TextSecondary
                 )
             }
+        }
 
-            Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-            // 3 Macro Trackers side by side: Carbs (g) | Protein (g) | Fat (g)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                MacroColumnItem(
-                    label = "Carbs (g)",
-                    consumed = summary.totalCarbs,
-                    target = summary.carbsGoal,
-                    modifier = Modifier.weight(1f)
-                )
-                MacroColumnItem(
-                    label = "Protein (g)",
-                    consumed = summary.totalProtein,
-                    target = summary.proteinGoal,
-                    modifier = Modifier.weight(1f)
-                )
-                MacroColumnItem(
-                    label = "Fat (g)",
-                    consumed = summary.totalFat,
-                    target = summary.fatGoal,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+        ThinProgressBar(
+            progress = progress,
+            height = 7.dp,
+            color = ClassicRed,
+            trackColor = SurfaceBorder.copy(alpha = 0.5f)
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            MacroColumnItem(
+                label = "Protein",
+                consumed = summary.totalProtein,
+                target = summary.proteinGoal,
+                progress = summary.proteinProgress,
+                accent = ClassicRed,
+                modifier = Modifier.weight(1f)
+            )
+            MacroColumnItem(
+                label = "Carbs",
+                consumed = summary.totalCarbs,
+                target = summary.carbsGoal,
+                progress = summary.carbsProgress,
+                accent = TextSecondary,
+                modifier = Modifier.weight(1f)
+            )
+            MacroColumnItem(
+                label = "Fat",
+                consumed = summary.totalFat,
+                target = summary.fatGoal,
+                progress = summary.fatProgress,
+                accent = TextMuted,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -610,41 +615,38 @@ private fun MacroColumnItem(
     label: String,
     consumed: Double,
     target: Double,
+    progress: Float,
+    accent: Color,
     modifier: Modifier = Modifier
 ) {
-    val progress = if (target > 0) (consumed / target).toFloat().coerceIn(0f, 1f) else 0f
-    val animatedProgress by animateFloatAsState(targetValue = progress, animationSpec = tween(500), label = "m_prog")
-
     Column(modifier = modifier) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary, fontSize = 12.sp)
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        // Progress bar
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(5.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(Color(0xFF26303E))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(animatedProgress)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(ProgressCyanBlue)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = TextMuted,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "${consumed.toInt()}",
+                style = MaterialTheme.typography.titleSmall,
+                color = TextPrimary
+            )
+            Text(
+                text = "/${target.toInt()}g",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted
             )
         }
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "${consumed.toInt()} / ${target.toInt()}",
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = FontWeight.Medium,
-                color = TextPrimary,
-                fontSize = 12.sp
-            )
+        ThinProgressBar(
+            progress = progress,
+            height = 4.dp,
+            color = accent,
+            trackColor = SurfaceBorder.copy(alpha = 0.45f)
         )
     }
 }
@@ -760,14 +762,6 @@ fun ScreenshotFoodLogGroupCard(
     if (logs.isEmpty()) return
 
     val totalCal = logs.sumOf { it.calories }
-    val totalC = logs.sumOf { it.carbohydrates }
-    val totalP = logs.sumOf { it.protein }
-    val totalF = logs.sumOf { it.fat }
-
-    val calPct = if (goalCalories > 0) ((totalCal / goalCalories) * 100).toInt() else 0
-    val cPct = if (goalCarbs > 0) ((totalC / goalCarbs) * 100).toInt() else 0
-    val pPct = if (goalProtein > 0) ((totalP / goalProtein) * 100).toInt() else 0
-    val fPct = if (goalFat > 0) ((totalF / goalFat) * 100).toInt() else 0
 
     val timeFormatted = remember(logs.first().timestamp) {
         val instant = Instant.ofEpochMilli(logs.first().timestamp)
@@ -777,176 +771,128 @@ fun ScreenshotFoodLogGroupCard(
 
     var menuExpanded by remember { mutableStateOf(false) }
 
-    Card(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("screenshot_food_group_card"),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder))
+            .testTag("screenshot_food_group_card")
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            // Optional summary sentence
-            val sentence = logs.joinToString(separator = ", ") { "${it.foodNameSnapshot} (${if (it.quantity % 1.0 == 0.0) it.quantity.toInt() else it.quantity}${it.servingUnit})" }
-            Text(
-                text = sentence,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = TextSecondary,
-                    fontSize = 13.sp
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = logs.first().mealType.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
+                    color = TextMuted
                 )
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Sub-food items
-            logs.forEach { item ->
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    val qtyStr = if (item.quantity % 1.0 == 0.0) "${item.quantity.toInt()}" else "${item.quantity}"
-                    Text(
-                        text = "${item.foodNameSnapshot} ($qtyStr ${item.servingUnit})",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            fontSize = 15.sp
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Chip badges in row: Calories: 330 | Carbs: 14g | Protein: 43g | Fat: 12g
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        ScreenshotPillBadge("Calories: ${item.calories.toInt()}")
-                        ScreenshotPillBadge("Carbs: ${item.carbohydrates.toInt()}g")
-                        ScreenshotPillBadge("Protein: ${item.protein.toInt()}g")
-                        ScreenshotPillBadge("Fat: ${item.fat.toInt()}g")
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Total row with mini progress bars
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                ScreenshotMacroTotalCol("Calories", "${totalCal.toInt()}", calPct, Modifier.weight(1f))
-                ScreenshotMacroTotalCol("Carbs", "${totalC.toInt()}g", cPct, Modifier.weight(1f))
-                ScreenshotMacroTotalCol("Protein", "${totalP.toInt()}g", pPct, Modifier.weight(1f))
-                ScreenshotMacroTotalCol("Fat", "${totalF.toInt()}g", fPct, Modifier.weight(1f))
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Footer: Timestamp + Edit + Menu
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
                 Text(
                     text = timeFormatted,
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted, fontSize = 12.sp)
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = TextMuted
                 )
+            }
+            Text(
+                text = "${totalCal.toInt()} kcal",
+                style = MaterialTheme.typography.titleSmall,
+                color = TextSecondary
+            )
+            Box {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.size(30.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Meal options",
+                        tint = TextMuted,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = { onEditLog(logs.first()) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Box {
-                        IconButton(
-                            onClick = { menuExpanded = true },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "Options",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    modifier = Modifier.background(SurfaceDark)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Delete all in meal", color = Color(0xFFEF4444)) },
+                        onClick = {
+                            logs.forEach { onDeleteLog(it) }
+                            menuExpanded = false
                         }
-
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                            modifier = Modifier.background(SurfaceDark)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Delete All in Meal", color = Color(0xFFEF4444)) },
-                                onClick = {
-                                    logs.forEach { onDeleteLog(it) }
-                                    menuExpanded = false
-                                }
-                            )
-                        }
-                    }
+                    )
                 }
             }
         }
-    }
-}
 
-@Composable
-private fun ScreenshotPillBadge(text: String) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(ChipBackground)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall.copy(
-                color = TextSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            )
-        )
-    }
-}
+        Spacer(modifier = Modifier.height(8.dp))
+        TrackableDivider()
 
-@Composable
-private fun ScreenshotMacroTotalCol(
-    label: String,
-    value: String,
-    pct: Int,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 11.sp))
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(value, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
-        Spacer(modifier = Modifier.height(4.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Color(0xFF26303E))
-        ) {
-            Box(
+        logs.forEachIndexed { index, item ->
+            Row(
                 modifier = Modifier
-                    .fillMaxWidth((pct / 100f).coerceIn(0f, 1f))
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(ProgressCyanBlue)
-            )
+                    .fillMaxWidth()
+                    .clickable { onEditLog(item) }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.foodNameSnapshot,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = buildString {
+                            append(formatFoodQuantity(item.quantity))
+                            append(" ")
+                            append(item.servingUnit)
+                            if (item.brandSnapshot.isNotBlank()) {
+                                append(" · ")
+                                append(item.brandSnapshot)
+                            }
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TextMuted,
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
+                    Spacer(modifier = Modifier.height(5.dp))
+                    MacroSummaryLine(
+                        protein = item.protein,
+                        carbs = item.carbohydrates,
+                        fat = item.fat
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "${item.calories.toInt()}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "kcal",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit ${item.foodNameSnapshot}",
+                    tint = TextMuted.copy(alpha = 0.55f),
+                    modifier = Modifier
+                        .padding(start = 8.dp, top = 3.dp)
+                        .size(14.dp)
+                )
+            }
+            if (index < logs.lastIndex) {
+                TrackableDivider(color = SurfaceBorder.copy(alpha = 0.45f))
+            }
         }
-        Spacer(modifier = Modifier.height(2.dp))
-        Text("$pct%", style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary, fontSize = 11.sp))
     }
 }
 
@@ -970,9 +916,8 @@ fun ScreenshotAiInputBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(24.dp))
                 .background(SurfaceCardHigh)
-                .border(1.dp, SurfaceBorder, RoundedCornerShape(28.dp))
                 .padding(horizontal = 14.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1024,30 +969,24 @@ fun ScreenshotAiInputBar(
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            // Plus / Send Icon
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = PrimaryGreen,
-                    strokeWidth = 2.dp
+            // Plus / Send Icon. There is deliberately no loading spinner here:
+            // progress is shown by the animated skeleton in the dashboard log.
+            IconButton(
+                onClick = {
+                    if (text.isNotBlank() && !isLoading) {
+                        onSendText(text)
+                        text = ""
+                    }
+                },
+                enabled = text.isNotBlank() && !isLoading,
+                modifier = Modifier.size(36.dp).testTag("send_log_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Send/Add",
+                    tint = if (text.isNotBlank() && !isLoading) ClassicRed else TextPrimary.copy(alpha = 0.45f),
+                    modifier = Modifier.size(26.dp)
                 )
-            } else {
-                IconButton(
-                    onClick = {
-                        if (text.isNotBlank()) {
-                            onSendText(text)
-                            text = ""
-                        }
-                    },
-                    modifier = Modifier.size(36.dp).testTag("send_log_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Send/Add",
-                        tint = if (text.isNotBlank()) PrimaryGreen else TextPrimary,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
             }
         }
     }

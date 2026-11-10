@@ -2,13 +2,16 @@ package com.example.ui.screens.history
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.database.AppSettingsEntity
 import com.example.data.database.FoodLogEntity
 import com.example.data.repository.DailyNutritionSummary
 import com.example.data.repository.NutritionRepository
+import com.example.util.DateBounds
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -22,6 +25,29 @@ class HistoryViewModel(
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
 
+    val appSettings: StateFlow<AppSettingsEntity?> = repository.settingsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val canGoPreviousDay: StateFlow<Boolean> = combine(_selectedDate, appSettings) { date, settings ->
+        DateBounds.canGoEarlier(date, settings)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    val canGoNextDay: StateFlow<Boolean> = combine(_selectedDate, appSettings) { date, settings ->
+        DateBounds.canGoLater(date, settings)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
     val dailySummary: StateFlow<DailyNutritionSummary> = _selectedDate
         .flatMapLatest { date ->
             repository.getDailySummary(date.toString())
@@ -33,15 +59,15 @@ class HistoryViewModel(
         )
 
     fun setDate(date: LocalDate) {
-        _selectedDate.value = date
+        _selectedDate.value = DateBounds.clamp(date, appSettings.value)
     }
 
     fun previousDay() {
-        _selectedDate.value = _selectedDate.value.minusDays(1)
+        _selectedDate.value = DateBounds.clamp(_selectedDate.value.minusDays(1), appSettings.value)
     }
 
     fun nextDay() {
-        _selectedDate.value = _selectedDate.value.plusDays(1)
+        _selectedDate.value = DateBounds.clamp(_selectedDate.value.plusDays(1), appSettings.value)
     }
 
     fun deleteLog(log: FoodLogEntity) {

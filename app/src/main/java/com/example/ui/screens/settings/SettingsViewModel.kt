@@ -66,6 +66,7 @@ class SettingsViewModel(
         geminiApiKey: String,
         nvidiaApiKey: String,
         openaiApiKey: String,
+        groqApiKey: String,
         nvidiaBaseUrl: String,
         calTarget: String,
         proteinTarget: String,
@@ -94,12 +95,15 @@ class SettingsViewModel(
             "GEMINI" -> if (geminiApiKey.trim() != settings.geminiApiKey.trim()) return true
             "NVIDIA_NIM" -> if (nvidiaApiKey.trim() != settings.nvidiaApiKey.trim()) return true
             "OPENAI" -> if (openaiApiKey.trim() != settings.openaiApiKey.trim()) return true
+            "GROQ" -> if (groqApiKey.trim() != settings.groqApiKey.trim()) return true
         }
         if (selectedAiProvider != settings.aiProvider) return true
         if (selectedModelName != when {
             selectedAiProvider == "GEMINI" -> settings.geminiModel
             selectedAiProvider == "NVIDIA_NIM" -> settings.nvidiaModel
             selectedAiProvider == "OPENAI" -> settings.openaiModel
+            selectedAiProvider == "GROQ" -> settings.groqModel
+            selectedAiProvider == "LOCAL" -> "local-smart"
             else -> settings.geminiModel
         }) return true
 
@@ -238,6 +242,7 @@ class SettingsViewModel(
                 "GEMINI" -> "Gemini (${settings.geminiModel})"
                 "NVIDIA_NIM" -> "NVIDIA NIM (${settings.nvidiaModel})"
                 "OPENAI" -> "OpenAI (${settings.openaiModel})"
+                "GROQ" -> "Groq (${settings.groqModel})"
                 else -> "Local Smart Engine"
             }
 
@@ -252,17 +257,20 @@ class SettingsViewModel(
                 "GEMINI" -> settings.geminiApiKey.trim()
                 "NVIDIA_NIM" -> settings.nvidiaApiKey.trim()
                 "OPENAI" -> settings.openaiApiKey.trim()
+                "GROQ" -> settings.groqApiKey.trim()
                 else -> ""
             }
             val baseUrl = when (provider) {
                 "NVIDIA_NIM" -> settings.nvidiaBaseUrl.trim()
                 "OPENAI" -> "https://api.openai.com/v1"
+                "GROQ" -> "https://api.groq.com/openai/v1"
                 else -> ""
             }
             val model = when (provider) {
                 "GEMINI" -> settings.geminiModel
                 "NVIDIA_NIM" -> settings.nvidiaModel
                 "OPENAI" -> settings.openaiModel
+                "GROQ" -> settings.groqModel
                 else -> ""
             }
 
@@ -282,7 +290,8 @@ class SettingsViewModel(
                             aiProvider = "LOCAL",
                             geminiApiKey = settings.geminiApiKey,
                             nvidiaApiKey = settings.nvidiaApiKey,
-                            openaiApiKey = settings.openaiApiKey
+                            openaiApiKey = settings.openaiApiKey,
+                            groqApiKey = settings.groqApiKey
                         )
                         repository.saveSettings(localSettings)
                         _saveResult.value = SaveResult(true, "No internet — AI set to Local. ${result.error}", navigateToDashboard = true)

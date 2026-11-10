@@ -1,5 +1,11 @@
 package com.example.ui.screens.onboarding
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -195,10 +201,8 @@ fun OnboardingScreen(
                 }
                 Text(
                     text = if (currentStep == 1) "Personal Profile" else "Nutritional Targets",
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = TextPrimary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -243,46 +247,24 @@ fun OnboardingScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
-                    Card(
+                    AnimatedContent(
+                        targetState = currentStep,
+                        transitionSpec = {
+                            val forward = targetState > initialState
+                            (slideInHorizontally { full -> if (forward) full else -full } + fadeIn()) togetherWith
+                                (slideOutHorizontally { full -> if (forward) -full else full } + fadeOut())
+                        },
+                        label = "onboarding_step"
+                    ) { step ->
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                        border = CardDefaults.outlinedCardBorder().copy(
-                            brush = androidx.compose.ui.graphics.SolidColor(SurfaceBorder)
-                        )
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            if (currentStep == 1) {
-                                // Page 1: Personal Profile
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = "Profile",
-                                        tint = PrimaryGreen,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Your Personal Details",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = TextPrimary
-                                        )
-                                    )
-                                }
-
+                            if (step == 1) {
                                 Text(
                                     text = "These help us tailor your nutrition tracking.",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = TextSecondary,
-                                        fontSize = 12.sp
-                                    )
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextMuted
                                 )
 
                                 // Name
@@ -299,16 +281,16 @@ fun OnboardingScreen(
                                 Box {
                                     OutlinedButton(
                                         onClick = { sexMenuExpanded = true },
-                                        modifier = Modifier.fillMaxWidth().height(54.dp).testTag("onboarding_sex_dropdown"),
-                                        shape = RoundedCornerShape(12.dp)
+                                        modifier = Modifier.fillMaxWidth().height(48.dp).testTag("onboarding_sex_dropdown"),
+                                        shape = RoundedCornerShape(10.dp)
                                     ) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text("Biological Sex:", color = TextSecondary)
-                                            Text(sex, color = PrimaryGreen, fontWeight = FontWeight.Bold)
+                                            Text("Sex", color = TextMuted)
+                                            Text(sex, color = TextPrimary, fontWeight = FontWeight.Medium)
                                         }
                                     }
 
@@ -383,16 +365,16 @@ fun OnboardingScreen(
                                 Box {
                                     OutlinedButton(
                                         onClick = { activityMenuExpanded = true },
-                                        modifier = Modifier.fillMaxWidth().height(54.dp).testTag("onboarding_activity_dropdown"),
-                                        shape = RoundedCornerShape(12.dp)
+                                        modifier = Modifier.fillMaxWidth().height(48.dp).testTag("onboarding_activity_dropdown"),
+                                        shape = RoundedCornerShape(10.dp)
                                     ) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text("Activity Level:", color = TextSecondary)
-                                            Text(activityLevel, color = PrimaryGreen, fontWeight = FontWeight.Bold)
+                                            Text("Activity", color = TextMuted)
+                                            Text(activityLevel, color = TextPrimary, fontWeight = FontWeight.Medium)
                                         }
                                     }
 
@@ -437,32 +419,10 @@ fun OnboardingScreen(
                                 }
                             } else {
                                 // Page 2: Nutritional Targets (auto-filled)
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocalFireDepartment,
-                                        contentDescription = "Targets",
-                                        tint = ProgressCyanBlue,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Daily Nutritional Targets",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = TextPrimary
-                                        )
-                                    )
-                                }
-
                                 Text(
-                                    text = "Auto-calculated from your profile. Adjust if needed, or tap “Set Later” to use defaults.",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = TextSecondary,
-                                        fontSize = 12.sp
-                                    )
+                                    text = "Auto-calculated from your profile. Adjust if needed.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextMuted
                                 )
 
                                 // Calories row

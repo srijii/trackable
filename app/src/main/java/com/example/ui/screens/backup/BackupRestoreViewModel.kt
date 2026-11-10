@@ -22,6 +22,15 @@ data class BackupMessage(
     val isError: Boolean = false
 )
 
+/** Which sections of a backup the user chose to restore. */
+data class RestoreSelection(
+    val inventory: Boolean = true,
+    val diet: Boolean = true,
+    val weightHistory: Boolean = true,
+    val profile: Boolean = true,
+    val settings: Boolean = true
+)
+
 class BackupRestoreViewModel(
     private val repository: NutritionRepository
 ) : ViewModel() {
@@ -42,15 +51,26 @@ class BackupRestoreViewModel(
      * Builds the backup file contents on a background thread, then hands the
      * suggested file name back so the UI can open the system file picker.
      */
-    fun prepareExport(scope: BackupScope, onReady: (fileName: String) -> Unit) {
+    fun prepareExport(
+        includeInventory: Boolean,
+        includeDiet: Boolean,
+        includeWeightHistory: Boolean,
+        includeAllAppData: Boolean,
+        onReady: (fileName: String) -> Unit
+    ) {
         if (_isBusy.value) return
         viewModelScope.launch {
             _isBusy.value = true
             try {
-                val payload = repository.buildBackupPayload(scope)
+                val payload = repository.buildBackupPayload(
+                    includeInventory = includeInventory,
+                    includeDiet = includeDiet,
+                    includeWeightHistory = includeWeightHistory,
+                    includeAllAppData = includeAllAppData
+                )
                 val json = withContext(Dispatchers.Default) { BackupJson.encode(payload) }
                 pendingExportJson = json
-                onReady(fileNameFor(scope))
+                onReady(fileNameFor(payload.scope))
             } catch (t: Throwable) {
                 _message.value = BackupMessage(
                     t.message ?: "Couldn't create the backup file.",
@@ -95,9 +115,8 @@ class BackupRestoreViewModel(
     }
 
     /**
-     * Reads and validates a chosen backup file. When the app already holds
-     * data that the file would overwrite, the import waits for confirmation;
-     * otherwise it is applied immediately.
+     * Reads and validates a chosen backup file. The user then picks which
+     * sections to restore before anything is applied.
      */
     fun prepareImport(resolver: ContentResolver, uri: Uri) {
         if (_isBusy.value) return
@@ -109,12 +128,7 @@ class BackupRestoreViewModel(
                         ?: throw IllegalStateException("Couldn't read the selected file.")
                 }
                 val payload = withContext(Dispatchers.Default) { BackupJson.decode(text) }
-                if (repository.hasExistingDataFor(payload)) {
-                    _pendingImport.value = payload
-                } else {
-                    repository.restoreBackupPayload(payload)
-                    _message.value = BackupMessage(restoredMessage(payload.scope))
-                }
+                _pendingImport.value = payload
             } catch (t: Throwable) {
                 val friendly = when (t) {
                     is org.json.JSONException -> "That file isn't valid JSON, so it can't be used as a backup."
@@ -128,15 +142,29 @@ class BackupRestoreViewModel(
         }
     }
 
-    /** Applies the import the user just confirmed. */
-    fun confirmImport() {
+    /** Applies the selected sections of the backup the user confirmed. */
+    fun confirmImport(selection: RestoreSelection) {
         val payload = _pendingImport.value ?: return
         _pendingImport.value = null
+
+        val filtered = payload.copy(
+            foods = payload.foods?.takeIf { selection.inventory },
+            foodLogs = payload.foodLogs?.takeIf { selection.diet },
+            waterLogs = payload.waterLogs?.takeIf { selection.diet },
+            weightLogs = payload.weightLogs?.takeIf { selection.weightHistory },
+            goals = payload.goals?.takeIf { selection.profile },
+            settings = payload.settings?.takeIf { selection.settings }
+        )
+        if (filtered.isEmpty()) {
+            _message.value = BackupMessage("Nothing selected to restore.", isError = true)
+            return
+        }
+
         viewModelScope.launch {
             _isBusy.value = true
             try {
-                repository.restoreBackupPayload(payload)
-                _message.value = BackupMessage(restoredMessage(payload.scope))
+                repository.restoreBackupPayload(filtered)
+                _message.value = BackupMessage(restoredMessage(filtered))
             } catch (t: Throwable) {
                 _message.value = BackupMessage(
                     t.message ?: "Couldn't restore this backup.",
@@ -156,10 +184,15 @@ class BackupRestoreViewModel(
         _message.value = null
     }
 
-    private fun restoredMessage(scope: BackupScope): String = when (scope) {
-        BackupScope.INVENTORY_DIET -> "Inventory and diet data restored."
-        BackupScope.WEIGHT_HISTORY -> "Weight history restored."
-        BackupScope.ALL_DATA -> "All app data restored."
+    private fun restoredMessage(payload: BackupPayload): String {
+        val parts = buildList {
+            if (payload.foods != null) add("inventory")
+            if (payload.foodLogs != null || payload.waterLogs != null) add("diet")
+            if (payload.weightLogs != null) add("weight history")
+            if (payload.goals != null) add("profile")
+            if (payload.settings != null) add("settings")
+        }
+        return if (parts.isEmpty()) "Backup restored." else "Restored ${parts.joinToString(", ")}."
     }
 
     private fun fileNameFor(scope: BackupScope): String {

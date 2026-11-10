@@ -2,6 +2,8 @@ package com.example.ui.screens.inventory
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.ai.NutritionAIService
+import com.example.ai.NutritionAiParseResult
 import com.example.data.database.FoodEntity
 import com.example.data.database.FoodLogEntity
 import com.example.data.repository.NutritionRepository
@@ -12,13 +14,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class InventoryViewModel(
-    private val repository: NutritionRepository
+    private val repository: NutritionRepository,
+    private val aiService: NutritionAIService
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -58,6 +62,15 @@ class InventoryViewModel(
             initialValue = listOf("All")
         )
 
+    /** True after the inventory has emitted its first database snapshot. */
+    val isLoaded: StateFlow<Boolean> = repository.allFoodsFlow
+        .map { true }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     fun onSearchQueryChanged(newQuery: String) {
         _searchQuery.value = newQuery
     }
@@ -76,6 +89,10 @@ class InventoryViewModel(
                 _message.value = "Updated '${food.name}'"
             }
         }
+    }
+
+    suspend fun scanNutritionLabel(imageBase64: String): NutritionAiParseResult {
+        return aiService.extractNutritionLabel(imageBase64)
     }
 
     fun deleteFood(food: FoodEntity) {

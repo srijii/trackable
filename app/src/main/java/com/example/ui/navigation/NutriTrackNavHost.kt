@@ -1,6 +1,11 @@
 package com.example.ui.navigation
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -128,7 +133,7 @@ fun NutriTrackApp(
 
     // Retain ViewModels across recompositions
     val dashboardViewModel = remember { DashboardViewModel(repository, aiCoordinator) }
-    val inventoryViewModel = remember { InventoryViewModel(repository) }
+    val inventoryViewModel = remember { InventoryViewModel(repository, aiCoordinator) }
     val weightTrackerViewModel = remember { WeightTrackerViewModel(repository) }
     val analyticsViewModel = remember { AnalyticsViewModel(repository) }
     val historyViewModel = remember { HistoryViewModel(repository) }
@@ -438,7 +443,23 @@ fun NutriTrackApp(
             ) {
                 NavHost(
                     navController = navController,
-                    startDestination = startDestination
+                    startDestination = startDestination,
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(240)) +
+                            slideInVertically(
+                                animationSpec = tween(280),
+                                initialOffsetY = { it / 24 }
+                            )
+                    },
+                    exitTransition = { fadeOut(animationSpec = tween(180)) },
+                    popEnterTransition = { fadeIn(animationSpec = tween(240)) },
+                    popExitTransition = {
+                        fadeOut(animationSpec = tween(180)) +
+                            slideOutVertically(
+                                animationSpec = tween(260),
+                                targetOffsetY = { it / 24 }
+                            )
+                    }
                 ) {
                     composable(Screen.Onboarding.route) {
                         OnboardingScreen(
@@ -469,6 +490,7 @@ fun NutriTrackApp(
                         Column(modifier = Modifier.fillMaxSize()) {
                             PageHeader(
                                 title = "Food Inventory",
+                                supportingText = "Saved foods, brands and labels",
                                 onMenuClick = {
                                     coroutineScope.launch { drawerState.open() }
                                 }
@@ -483,6 +505,7 @@ fun NutriTrackApp(
                         Column(modifier = Modifier.fillMaxSize()) {
                             PageHeader(
                                 title = "Weight Tracker",
+                                supportingText = "Weigh-ins and progress",
                                 onMenuClick = {
                                     coroutineScope.launch { drawerState.open() }
                                 }
@@ -497,6 +520,7 @@ fun NutriTrackApp(
                         Column(modifier = Modifier.fillMaxSize()) {
                             PageHeader(
                                 title = "Analysis",
+                                supportingText = "Trends across your logged days",
                                 onMenuClick = {
                                     coroutineScope.launch { drawerState.open() }
                                 }
@@ -511,6 +535,7 @@ fun NutriTrackApp(
                         Column(modifier = Modifier.fillMaxSize()) {
                             PageHeader(
                                 title = "History",
+                                supportingText = "Every day, one page",
                                 onMenuClick = {
                                     coroutineScope.launch { drawerState.open() }
                                 }
@@ -525,6 +550,7 @@ fun NutriTrackApp(
                         Column(modifier = Modifier.fillMaxSize()) {
                             PageHeader(
                                 title = "Backup & Restore",
+                                supportingText = "Export and import your data",
                                 onMenuClick = {
                                     coroutineScope.launch { drawerState.open() }
                                 }
@@ -539,6 +565,7 @@ fun NutriTrackApp(
                         Column(modifier = Modifier.fillMaxSize()) {
                             PageHeader(
                                 title = "Settings",
+                                supportingText = "AI model, targets and profile",
                                 onMenuClick = {
                                     coroutineScope.launch { drawerState.open() }
                                 }
