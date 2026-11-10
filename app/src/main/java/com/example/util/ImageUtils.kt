@@ -9,6 +9,7 @@ import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.util.Base64
+import androidx.annotation.RequiresApi
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
@@ -46,6 +47,13 @@ object ImageUtils {
         }
     }
 
+    /**
+     * Decodes through [ImageDecoder], which only exists from API 28. The call
+     * site in [decodeBitmap] is guarded by a runtime version check, and this
+     * annotation tells lint (and the compiler) that the API 28 APIs below are
+     * safe to use inside this function.
+     */
+    @RequiresApi(Build.VERSION_CODES.P)
     private fun decodeWithImageDecoder(context: Context, uri: Uri, maxDimension: Int): Bitmap? {
         return runCatching {
             val source = ImageDecoder.createSource(context.contentResolver, uri)
@@ -66,6 +74,15 @@ object ImageUtils {
         }.getOrNull()
     }
 
+    /**
+     * Fallback for API 24-27, where [ImageDecoder] does not exist.
+     *
+     * It mirrors the behaviour of the ImageDecoder path: the bitmap is
+     * decoded in software (ARGB_8888), kept immutable, subsampled while
+     * decoding to avoid allocating a huge bitmap, then scaled so the longest
+     * edge matches [maxDimension]. ImageDecoder applies the EXIF orientation
+     * on its own, so the rotation is applied explicitly here.
+     */
     private fun decodeLegacy(context: Context, uri: Uri, maxDimension: Int): Bitmap? {
         val bytes = runCatching {
             context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
