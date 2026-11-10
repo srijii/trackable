@@ -106,7 +106,11 @@ fun NutriTrackApp(
     var settingsNavigationHandler by remember { mutableStateOf<((() -> Unit) -> Unit)?>(null) }
 
     val onboardingViewModel = remember { OnboardingViewModel(repository) }
-    val appSettingsState by repository.settingsFlow.collectAsState(initial = null)
+    // The settings flow always emits a value; null here only means the first
+    // emission has not arrived yet.
+    val appSettingsState by repository.settingsFlow.collectAsState(
+        initial = null as com.example.data.database.AppSettingsEntity?
+    )
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()

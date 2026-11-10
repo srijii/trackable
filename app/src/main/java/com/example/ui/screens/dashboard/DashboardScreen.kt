@@ -55,8 +55,8 @@ import com.example.ui.components.DashboardAiAnalysingCard
 import com.example.ui.components.DashboardAiLoggedItems
 import com.example.ui.components.DashboardFoodSkeleton
 import com.example.ui.components.DashboardStatsSkeleton
-import com.example.ui.components.EditFoodLogDialog
 import com.example.ui.components.EmptyState
+import com.example.ui.components.MealEntryDialog
 import com.example.ui.components.ScannedFoodDialog
 import com.example.ui.components.ScreenshotAiInputBar
 import com.example.ui.components.ScreenshotCalorieGoalWarningBanner
@@ -103,7 +103,7 @@ fun DashboardScreen(
     val feedbackMessage by viewModel.userFeedbackMessage.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
-    var editingLog by remember { mutableStateOf<FoodLogEntity?>(null) }
+    var viewingLog by remember { mutableStateOf<FoodLogEntity?>(null) }
     var showCameraDialog by remember { mutableStateOf(false) }
     var scannedFood by remember { mutableStateOf<com.example.data.database.FoodEntity?>(null) }
     var editingScannedFood by remember { mutableStateOf<com.example.data.database.FoodEntity?>(null) }
@@ -162,7 +162,8 @@ fun DashboardScreen(
                 ScreenshotTopHeader(
                     selectedDate = selectedDate,
                     onMenuClick = onOpenDrawer,
-                    onDateSelect = { viewModel.setSelectedDate(it) }
+                    onDateSelect = { viewModel.setSelectedDate(it) },
+                    allowFutureDates = appSettings?.blockAfterToday == false
                 )
             }
 
@@ -292,7 +293,7 @@ fun DashboardScreen(
                     item {
                         SectionHeader(
                             title = "Today's meals",
-                            supportingText = "Tap an item to edit it",
+                            supportingText = "Tap an item to see its details",
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                         )
                     }
@@ -309,7 +310,7 @@ fun DashboardScreen(
                                     goalCarbs = summary.carbsGoal,
                                     goalProtein = summary.proteinGoal,
                                     goalFat = summary.fatGoal,
-                                    onEditLog = { editingLog = it },
+                                    onEditLog = { viewingLog = it },
                                     onDeleteLog = { viewModel.deleteFoodLog(it) }
                                 )
                             }
@@ -346,16 +347,22 @@ fun DashboardScreen(
         )
     }
 
-    // Full dashboard entry editor (name, brand, meal, quantity, unit, macros).
-    editingLog?.let { logToEdit ->
-        EditFoodLogDialog(
-            log = logToEdit,
-            matchedFood = inventory.firstOrNull { it.id == logToEdit.foodId },
-            onDismiss = { editingLog = null },
+    // Tapping a logged food opens that meal entry: what it was, how much was
+    // eaten and what it added up to. Editing changes the entry, never the
+    // food in the inventory.
+    viewingLog?.let { logToView ->
+        MealEntryDialog(
+            log = logToView,
+            matchedFood = inventory.firstOrNull { it.id == logToView.foodId },
             onSave = { updatedLog ->
                 viewModel.updateFoodLogEntry(updatedLog)
-                editingLog = null
-            }
+                viewingLog = null
+            },
+            onDelete = {
+                viewModel.deleteFoodLog(logToView)
+                viewingLog = null
+            },
+            onDismiss = { viewingLog = null }
         )
     }
 

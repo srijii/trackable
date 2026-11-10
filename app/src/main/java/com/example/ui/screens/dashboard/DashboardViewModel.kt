@@ -295,6 +295,11 @@ class DashboardViewModel(
                 return
             }
 
+            if (!canWriteToSelectedDate()) {
+                _aiParseResult.value = null
+                return
+            }
+
             val settings = repository.getSettings()
             if (settings.aiProvider == "LOCAL") {
                 // Local Smart Engine is the only provider that asks for confirmation.
@@ -392,6 +397,7 @@ class DashboardViewModel(
     }
 
     fun confirmAiLog(confirmedItems: List<ParsedItemCandidate>, waterMl: Int) {
+        if (!canWriteToSelectedDate()) return
         viewModelScope.launch {
             insertParsedItems(confirmedItems.filter { it.matchedFood != null })
 
@@ -446,6 +452,7 @@ class DashboardViewModel(
      * one serving to the currently selected day.
      */
     fun saveScannedFoodAndLog(food: FoodEntity) {
+        if (!canWriteToSelectedDate()) return
         viewModelScope.launch {
             val foodId = repository.insertFood(food)
             val calc = NutritionCalculationEngine.calculate(food, food.servingSize, food.servingUnit)
@@ -479,7 +486,19 @@ class DashboardViewModel(
     // Water & log editing
     // ---------------------------------------------------------------------
 
+    /**
+     * Guards every action that writes new data. The "block adding after
+     * today" setting decides whether a future day may be written to, and the
+     * user gets a clear message instead of a silent no-op.
+     */
+    private fun canWriteToSelectedDate(): Boolean {
+        if (DateBounds.isAddAllowed(_selectedDate.value, appSettings.value)) return true
+        _userFeedbackMessage.value = "Adding after today is turned off in Settings."
+        return false
+    }
+
     fun addWaterCupSize1() {
+        if (!canWriteToSelectedDate()) return
         viewModelScope.launch {
             val size = appSettings.value?.cupSize1Ml ?: 250
             repository.addWater(size, _selectedDate.value.toString())
@@ -488,6 +507,7 @@ class DashboardViewModel(
     }
 
     fun addWaterCupSize2() {
+        if (!canWriteToSelectedDate()) return
         viewModelScope.launch {
             val size = appSettings.value?.cupSize2Ml ?: 500
             repository.addWater(size, _selectedDate.value.toString())
@@ -506,6 +526,7 @@ class DashboardViewModel(
     }
 
     fun addWater(amountMl: Int) {
+        if (!canWriteToSelectedDate()) return
         viewModelScope.launch {
             repository.addWater(amountMl, _selectedDate.value.toString())
             _userFeedbackMessage.value = "Added $amountMl ml water"

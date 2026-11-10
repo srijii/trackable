@@ -45,4 +45,19 @@ object DateBounds {
         val latest = latestAllowedDate(settings, today) ?: return true
         return date < latest
     }
+
+    /**
+     * Whether new data may be added to [date].
+     *
+     * Today and past days are always allowed. Future days are only allowed
+     * when "block adding after today" is switched off in the settings.
+     */
+    fun isAddAllowed(
+        date: LocalDate,
+        settings: AppSettingsEntity?,
+        today: LocalDate = LocalDate.now()
+    ): Boolean {
+        if (!date.isAfter(today)) return true
+        return settings?.blockAfterToday == false
+    }
 }

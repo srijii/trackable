@@ -109,7 +109,8 @@ import java.time.temporal.TemporalAdjusters
 fun ScreenshotTopHeader(
     selectedDate: LocalDate,
     onMenuClick: () -> Unit = {},
-    onDateSelect: (LocalDate) -> Unit = {}
+    onDateSelect: (LocalDate) -> Unit = {},
+    allowFutureDates: Boolean = false
 ) {
     var dropdownExpanded by remember { mutableStateOf(false) }
 
@@ -176,6 +177,15 @@ fun ScreenshotTopHeader(
                             dropdownExpanded = false
                         }
                     )
+                    if (allowFutureDates) {
+                        DropdownMenuItem(
+                            text = { Text("Tomorrow", color = TextPrimary) },
+                            onClick = {
+                                onDateSelect(LocalDate.now().plusDays(1))
+                                dropdownExpanded = false
+                            }
+                        )
+                    }
                 }
             }
             Text(
@@ -308,7 +318,9 @@ fun ScreenshotWeekCalendarStrip(
             val isBeforeStartBlocked = isBeforeStartVisually && blockBeforeStartDate
             val isFutureBlocked = isFuture && blockAfterToday
             val trackable = !isBeforeStartBlocked && !isFutureBlocked
-            val showProhibitionSign = isBeforeStartVisually || isFuture
+            // Only days that really cannot be edited get the strike-through.
+            // When "block after today" is off, future days are selectable.
+            val showProhibitionSign = isBeforeStartVisually || isFutureBlocked
 
             val summary = summariesByDate[date.toString()]
             val tracked = summary?.foodLogs?.isNotEmpty() == true
@@ -583,19 +595,19 @@ fun ScreenshotCaloriesAndMacrosCard(
             horizontalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             MacroColumnItem(
-                label = "Protein",
-                consumed = summary.totalProtein,
-                target = summary.proteinGoal,
-                progress = summary.proteinProgress,
-                accent = ClassicRed,
-                modifier = Modifier.weight(1f)
-            )
-            MacroColumnItem(
                 label = "Carbs",
                 consumed = summary.totalCarbs,
                 target = summary.carbsGoal,
                 progress = summary.carbsProgress,
                 accent = TextSecondary,
+                modifier = Modifier.weight(1f)
+            )
+            MacroColumnItem(
+                label = "Protein",
+                consumed = summary.totalProtein,
+                target = summary.proteinGoal,
+                progress = summary.proteinProgress,
+                accent = ClassicRed,
                 modifier = Modifier.weight(1f)
             )
             MacroColumnItem(
@@ -780,18 +792,12 @@ fun ScreenshotFoodLogGroupCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = logs.first().mealType.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp),
-                    color = TextMuted
-                )
-                Text(
-                    text = timeFormatted,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = TextMuted
-                )
-            }
+            Text(
+                text = timeFormatted,
+                style = MaterialTheme.typography.labelMedium,
+                color = TextMuted,
+                modifier = Modifier.weight(1f)
+            )
             Text(
                 text = "${totalCal.toInt()} kcal",
                 style = MaterialTheme.typography.titleSmall,
@@ -879,15 +885,6 @@ fun ScreenshotFoodLogGroupCard(
                         color = TextMuted
                     )
                 }
-
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit ${item.foodNameSnapshot}",
-                    tint = TextMuted.copy(alpha = 0.55f),
-                    modifier = Modifier
-                        .padding(start = 8.dp, top = 3.dp)
-                        .size(14.dp)
-                )
             }
             if (index < logs.lastIndex) {
                 TrackableDivider(color = SurfaceBorder.copy(alpha = 0.45f))

@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.database.FoodLogEntity
 import com.example.ui.components.EmptyState
 import com.example.ui.components.HistoryDaySkeleton
+import com.example.ui.components.MealEntryDialog
 import com.example.ui.components.MacroSummaryLine
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.TrackableDivider
@@ -83,7 +84,9 @@ fun HistoryScreen(
     val canGoPreviousDay by viewModel.canGoPreviousDay.collectAsStateWithLifecycle()
     val canGoNextDay by viewModel.canGoNextDay.collectAsStateWithLifecycle()
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
+    val inventory by viewModel.inventory.collectAsStateWithLifecycle()
     var showDatePicker by remember { mutableStateOf(false) }
+    var viewingLog by remember { mutableStateOf<FoodLogEntity?>(null) }
 
     val loaded = appSettings != null
     val dateFormatted = remember(selectedDate) {
@@ -291,6 +294,7 @@ fun HistoryScreen(
                             items(mealItems, key = { it.id }) { log ->
                                 HistoryFoodRow(
                                     log = log,
+                                    onClick = { viewingLog = log },
                                     onDelete = { viewModel.deleteLog(log) },
                                     modifier = Modifier.animateItem()
                                 )
@@ -314,6 +318,23 @@ fun HistoryScreen(
                 showDatePicker = false
             },
             onDismiss = { showDatePicker = false }
+        )
+    }
+
+    // Tapping an entry opens that meal entry; editing changes the entry only.
+    viewingLog?.let { logToView ->
+        MealEntryDialog(
+            log = logToView,
+            matchedFood = inventory.firstOrNull { it.id == logToView.foodId },
+            onSave = { updatedLog ->
+                viewModel.updateLog(updatedLog)
+                viewingLog = null
+            },
+            onDelete = {
+                viewModel.deleteLog(logToView)
+                viewingLog = null
+            },
+            onDismiss = { viewingLog = null }
         )
     }
 }
@@ -349,6 +370,7 @@ private fun SummaryMacro(
 @Composable
 private fun HistoryFoodRow(
     log: FoodLogEntity,
+    onClick: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -363,6 +385,8 @@ private fun HistoryFoodRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
             .padding(vertical = 11.dp),
         verticalAlignment = Alignment.Top
     ) {

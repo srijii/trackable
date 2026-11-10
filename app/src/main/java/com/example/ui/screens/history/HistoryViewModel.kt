@@ -3,6 +3,7 @@ package com.example.ui.screens.history
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.database.AppSettingsEntity
+import com.example.data.database.FoodEntity
 import com.example.data.database.FoodLogEntity
 import com.example.data.repository.DailyNutritionSummary
 import com.example.data.repository.NutritionRepository
@@ -75,4 +76,19 @@ class HistoryViewModel(
             repository.deleteFoodLog(log)
         }
     }
+
+    /** Saves an edited entry back to the day log. */
+    fun updateLog(log: FoodLogEntity) {
+        viewModelScope.launch {
+            repository.updateFoodLog(log)
+        }
+    }
+
+    /** The inventory, so an edited entry can recalculate its macros. */
+    val inventory: StateFlow<List<FoodEntity>> = repository.allFoodsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 }

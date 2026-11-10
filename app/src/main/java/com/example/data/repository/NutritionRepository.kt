@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -133,7 +134,13 @@ class NutritionRepository(private val database: AppDatabase) {
         return weightLogDao.getLatestWeightLog()
     }
 
-    val settingsFlow: Flow<com.example.data.database.AppSettingsEntity?> = appSettingsDao.getSettingsFlow()
+    /**
+     * The stored settings, or the defaults when nothing has been saved yet.
+     * Consumers always get a value, so a setting is never silently treated as
+     * "unknown" (which would, for example, block adding future days).
+     */
+    val settingsFlow: Flow<com.example.data.database.AppSettingsEntity> =
+        appSettingsDao.getSettingsFlow().map { it ?: com.example.data.database.AppSettingsEntity() }
 
     suspend fun getSettings(): com.example.data.database.AppSettingsEntity {
         return appSettingsDao.getSettings() ?: com.example.data.database.AppSettingsEntity()
