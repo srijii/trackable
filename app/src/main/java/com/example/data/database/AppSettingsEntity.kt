@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 data class AppSettingsEntity(
     @PrimaryKey
     val id: Int = 1,
-    val aiProvider: String = "LOCAL", // "GEMINI", "NVIDIA_NIM", "OPENAI", "LOCAL"
+    val aiProvider: String = "LOCAL", // "GEMINI", "NVIDIA_NIM", "OPENAI", "GROQ", "LOCAL"
     val geminiApiKey: String = "",
     val geminiModel: String = "gemini-3.6-flash",
     val nvidiaApiKey: String = "",
@@ -15,6 +15,8 @@ data class AppSettingsEntity(
     val nvidiaBaseUrl: String = "https://integrate.api.nvidia.com/v1",
     val openaiApiKey: String = "",
     val openaiModel: String = "gpt-4o-mini",
+    val groqApiKey: String = "",
+    val groqModel: String = "qwen/qwen3.8-27b",
     val dismissedGoalWarning: Boolean = false,
     // Tracking starts from this day (inclusive). Days before this date are untrackable.
     val startDate: String? = null, // "YYYY-MM-DD"

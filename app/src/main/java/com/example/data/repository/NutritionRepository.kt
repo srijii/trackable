@@ -9,6 +9,7 @@ import com.example.data.database.FoodEntity
 import com.example.data.database.FoodLogEntity
 import com.example.data.database.NutritionGoalEntity
 import com.example.data.database.WaterLogEntity
+import com.example.util.ApiKeyUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -139,7 +140,16 @@ class NutritionRepository(private val database: AppDatabase) {
     }
 
     suspend fun saveSettings(settings: com.example.data.database.AppSettingsEntity) {
-        appSettingsDao.insertOrUpdate(settings)
+        // Store clean keys: clipboard noise (quotes, "Bearer ", env-var names)
+        // otherwise makes the provider reject an otherwise valid key.
+        appSettingsDao.insertOrUpdate(
+            settings.copy(
+                geminiApiKey = ApiKeyUtils.normalize(settings.geminiApiKey),
+                nvidiaApiKey = ApiKeyUtils.normalize(settings.nvidiaApiKey),
+                openaiApiKey = ApiKeyUtils.normalize(settings.openaiApiKey),
+                groqApiKey = ApiKeyUtils.normalize(settings.groqApiKey)
+            )
+        )
     }
 
     // -----------------------------------------------------------------------
@@ -156,13 +166,26 @@ class NutritionRepository(private val database: AppDatabase) {
         model: String,
         baseUrl: String = ""
     ): ApiKeyTestResult = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+        val key = ApiKeyUtils.normalize(apiKey)
+        if (key.isBlank() || key == "MY_GEMINI_API_KEY") {
             ApiKeyTestResult.Failure("API key is empty or is a placeholder")
         } else {
             try {
                 when (provider) {
-                    "GEMINI" -> testGeminiKey(apiKey, model)
-                    "NVIDIA_NIM", "OPENAI" -> testOpenAICompatibleKey(apiKey, baseUrl, model)
+                    "GEMINI" -> testGeminiKey(key, model)
+                    "NVIDIA_NIM", "OPENAI" -> testOpenAICompatibleKey(key, baseUrl, model)
+                    "GROQ" -> {
+                        ApiKeyUtils.groqKeyIssue(key)?.let {
+                            return@withContext ApiKeyTestResult.Failure(it)
+                        }
+                        testOpenAICompatibleKey(
+                            apiKey = key,
+                            baseUrl = "https://api.groq.com/openai/v1",
+                            model = model,
+                            providerName = "Groq",
+                            isGroq = true
+                        )
+                    }
                     "LOCAL" -> ApiKeyTestResult.Success
                     else -> ApiKeyTestResult.Failure("Unknown provider: $provider")
                 }
@@ -202,7 +225,13 @@ class NutritionRepository(private val database: AppDatabase) {
         }
     }
 
-    private suspend fun testOpenAICompatibleKey(apiKey: String, baseUrl: String, model: String): ApiKeyTestResult {
+    private suspend fun testOpenAICompatibleKey(
+        apiKey: String,
+        baseUrl: String,
+        model: String,
+        providerName: String = "API",
+        isGroq: Boolean = false
+    ): ApiKeyTestResult {
         var url = baseUrl.trim()
         if (url.endsWith("/")) {
             url = url.substring(0, url.length - 1)
@@ -229,7 +258,18 @@ class NutritionRepository(private val database: AppDatabase) {
             ApiKeyTestResult.Success
         } else {
             val bodyText = response.body?.string() ?: ""
-            ApiKeyTestResult.Failure("API error (HTTP ${response.code}): ${response.message}. $bodyText")
+            if (isGroq) {
+                ApiKeyTestResult.Failure(ApiKeyUtils.groqHttpErrorMessage(response.code, bodyText))
+            } else {
+                val explanation = when (response.code) {
+                    401 -> "The API key was rejected (HTTP 401). Check that the full key is pasted, active, and belongs to this provider."
+                    403 -> "$providerName denied access (HTTP 403). Check that the key is active and has access to the selected model."
+                    404 -> "$providerName could not find the selected model (HTTP 404). Check the model name."
+                    429 -> "$providerName rate limit reached (HTTP 429). Wait a moment and retry."
+                    else -> "$providerName API error (HTTP ${response.code}): ${response.message}."
+                }
+                ApiKeyTestResult.Failure("$explanation ${bodyText.take(300)}".trim())
+            }
         }
     }
 
@@ -264,6 +304,33 @@ class NutritionRepository(private val database: AppDatabase) {
             weightLogs = weightLogDao.getAllWeightLogsForBackup(),
             goals = goalDao.getGoals() ?: NutritionGoalEntity(),
             settings = getSettings()
+        )
+    }
+
+    /**
+     * Builds a backup payload from the individual checkboxes shown in the UI.
+     * "All App Data" is a superset: selecting it includes every section.
+     */
+    suspend fun buildBackupPayload(
+        includeInventory: Boolean,
+        includeDiet: Boolean,
+        includeWeightHistory: Boolean,
+        includeAllAppData: Boolean
+    ): BackupPayload {
+        val all = includeAllAppData
+        return BackupPayload(
+            scope = when {
+                all -> BackupScope.ALL_DATA
+                includeWeightHistory && includeInventory && includeDiet -> BackupScope.ALL_DATA
+                includeWeightHistory -> BackupScope.WEIGHT_HISTORY
+                else -> BackupScope.INVENTORY_DIET
+            },
+            foods = if (all || includeInventory) foodDao.getAllFoodsForBackup() else null,
+            foodLogs = if (all || includeDiet) foodLogDao.getAllLogsForBackup() else null,
+            waterLogs = if (all || includeDiet) waterLogDao.getAllWaterLogsForBackup() else null,
+            weightLogs = if (all || includeWeightHistory) weightLogDao.getAllWeightLogsForBackup() else null,
+            goals = if (all) (goalDao.getGoals() ?: NutritionGoalEntity()) else null,
+            settings = if (all) getSettings() else null
         )
     }
 
@@ -337,7 +404,7 @@ class NutritionRepository(private val database: AppDatabase) {
 
     suspend fun insertFoodLog(log: FoodLogEntity): Long = foodLogDao.insertLog(log)
 
-    suspend fun insertFoodLogs(logs: List<FoodLogEntity>) = foodLogDao.insertAllLogs(logs)
+    suspend fun insertFoodLogs(logs: List<FoodLogEntity>): List<Long> = foodLogDao.insertAllLogs(logs)
 
     suspend fun updateFoodLog(log: FoodLogEntity) = foodLogDao.updateLog(log)
 

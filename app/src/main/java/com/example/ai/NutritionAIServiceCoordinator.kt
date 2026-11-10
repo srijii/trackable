@@ -19,8 +19,7 @@ class NutritionAIServiceCoordinator(
             kotlinx.coroutines.runBlocking {
                 repository.getSettings().geminiModel
             }
-        },
-        localFallbackService = localService
+        }
     )
 
     private val nvidiaService = NvidiaNimNutritionAIService(
@@ -38,8 +37,7 @@ class NutritionAIServiceCoordinator(
             kotlinx.coroutines.runBlocking {
                 repository.getSettings().nvidiaBaseUrl
             }
-        },
-        localFallbackService = localService
+        }
     )
 
     private val openAiService = NvidiaNimNutritionAIService(
@@ -55,8 +53,20 @@ class NutritionAIServiceCoordinator(
         },
         baseUrlProvider = {
             "https://api.openai.com/v1"
+        }
+    )
+
+    private val groqService = GroqNutritionAIService(
+        apiKeyProvider = {
+            kotlinx.coroutines.runBlocking {
+                repository.getSettings().groqApiKey
+            }
         },
-        localFallbackService = localService
+        modelProvider = {
+            kotlinx.coroutines.runBlocking {
+                repository.getSettings().groqModel
+            }
+        }
     )
 
     override val providerName: String
@@ -65,9 +75,16 @@ class NutritionAIServiceCoordinator(
             return when (settings.aiProvider) {
                 "NVIDIA_NIM" -> "NVIDIA NIM (${settings.nvidiaModel})"
                 "OPENAI" -> "OpenAI (${settings.openaiModel})"
+                "GROQ" -> "Groq (${settings.groqModel})"
                 "LOCAL" -> "Local Smart Engine"
                 else -> "Gemini (${settings.geminiModel})"
             }
+        }
+
+    override val supportsImageInput: Boolean
+        get() {
+            val provider = kotlinx.coroutines.runBlocking { repository.getSettings().aiProvider }
+            return provider == "GROQ"
         }
 
     override suspend fun parseFoodInput(
@@ -78,8 +95,28 @@ class NutritionAIServiceCoordinator(
         return when (settings.aiProvider) {
             "NVIDIA_NIM" -> nvidiaService.parseFoodInput(userInput, inventory)
             "OPENAI" -> openAiService.parseFoodInput(userInput, inventory)
+            "GROQ" -> groqService.parseFoodInput(userInput, inventory)
             "LOCAL" -> localService.parseFoodInput(userInput, inventory)
             else -> geminiService.parseFoodInput(userInput, inventory)
+        }
+    }
+
+    override suspend fun extractNutritionLabel(imageBase64: String): NutritionAiParseResult {
+        val settings = repository.getSettings()
+        // Groq Qwen is the vision-capable provider. If the user configured a
+        // Groq key, use it for photos even while text logging uses another
+        // provider -- otherwise the camera would fail for a purely unrelated
+        // text-model choice.
+        val hasGroqKey = com.example.util.ApiKeyUtils.normalize(settings.groqApiKey)
+            .let { it.isNotBlank() && !it.startsWith("MY_") }
+        return when {
+            settings.aiProvider == "GROQ" -> groqService.extractNutritionLabel(imageBase64)
+            hasGroqKey -> groqService.extractNutritionLabel(imageBase64)
+            else -> NutritionAiParseResult(
+                isSuccess = false,
+                providerUsed = providerName,
+                errorMessage = "Photo scanning needs a vision-capable AI model. Add a Groq API key in Settings (Groq Qwen reads nutrition labels), or add the food manually."
+            )
         }
     }
 }

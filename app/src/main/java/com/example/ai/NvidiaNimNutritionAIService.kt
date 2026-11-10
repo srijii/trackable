@@ -2,6 +2,7 @@ package com.example.ai
 
 import com.example.data.database.FoodEntity
 import com.example.domain.NutritionCalculationEngine
+import com.example.util.ApiKeyUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -15,8 +16,7 @@ import java.util.concurrent.TimeUnit
 class NvidiaNimNutritionAIService(
     private val apiKeyProvider: () -> String,
     private val modelProvider: () -> String = { "minimaxai/minimax-m3.1-flash" },
-    private val baseUrlProvider: () -> String = { "https://integrate.api.nvidia.com/v1" },
-    private val localFallbackService: LocalRuleBasedNutritionAIService = LocalRuleBasedNutritionAIService()
+    private val baseUrlProvider: () -> String = { "https://integrate.api.nvidia.com/v1" }
 ) : NutritionAIService {
 
     override val providerName: String = "NVIDIA NIM"
@@ -30,11 +30,12 @@ class NvidiaNimNutritionAIService(
         userInput: String,
         inventory: List<FoodEntity>
     ): NutritionAiParseResult = withContext(Dispatchers.IO) {
-        val apiKey = apiKeyProvider().trim()
+        val apiKey = ApiKeyUtils.normalize(apiKeyProvider())
         if (apiKey.isBlank()) {
-            val fallback = localFallbackService.parseFoodInput(userInput, inventory)
-            return@withContext fallback.copy(
-                providerUsed = "Local (No NVIDIA API Key configured)"
+            return@withContext NutritionAiParseResult(
+                isSuccess = false,
+                providerUsed = providerName,
+                errorMessage = "No API key configured for $providerName. Add it in Settings, or switch to Local AI."
             )
         }
 
@@ -133,9 +134,11 @@ class NvidiaNimNutritionAIService(
 
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) {
-                val fallback = localFallbackService.parseFoodInput(userInput, inventory)
-                return@withContext fallback.copy(
-                    providerUsed = "Local (NVIDIA error HTTP ${response.code})"
+                val errorBody = response.body?.string()?.take(300).orEmpty()
+                return@withContext NutritionAiParseResult(
+                    isSuccess = false,
+                    providerUsed = providerName,
+                    errorMessage = "$providerName request failed (HTTP ${response.code}). ${errorBody.ifBlank { "The API key or model may be invalid." }} You can retry or switch to Local AI."
                 )
             }
 
@@ -233,8 +236,11 @@ class NvidiaNimNutritionAIService(
                 summaryText = "Parsed with NVIDIA NIM"
             )
         } catch (e: Exception) {
-            val localResult = localFallbackService.parseFoodInput(userInput, inventory)
-            localResult.copy(providerUsed = "Local (Fallback: ${e.message ?: "Network error"})")
+            NutritionAiParseResult(
+                isSuccess = false,
+                providerUsed = providerName,
+                errorMessage = "$providerName request failed: ${e.message ?: "Unknown network error"}. You can retry or switch to Local AI."
+            )
         }
     }
 }

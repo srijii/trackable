@@ -241,6 +241,8 @@ object BackupJson {
         put("nvidiaBaseUrl", settings.nvidiaBaseUrl)
         put("openaiApiKey", settings.openaiApiKey)
         put("openaiModel", settings.openaiModel)
+        put("groqApiKey", settings.groqApiKey)
+        put("groqModel", settings.groqModel)
         put("dismissedGoalWarning", settings.dismissedGoalWarning)
         put("startDate", settings.startDate ?: JSONObject.NULL)
         put("useStartDate", settings.useStartDate)
@@ -261,6 +263,8 @@ object BackupJson {
         nvidiaBaseUrl = json.optString("nvidiaBaseUrl", "https://integrate.api.nvidia.com/v1"),
         openaiApiKey = json.optString("openaiApiKey", ""),
         openaiModel = json.optString("openaiModel", "gpt-4o-mini"),
+        groqApiKey = json.optString("groqApiKey", ""),
+        groqModel = json.optString("groqModel", "qwen/qwen3.8-27b"),
         dismissedGoalWarning = json.optBoolean("dismissedGoalWarning", false),
         startDate = json.nullableString("startDate"),
         useStartDate = json.optBoolean("useStartDate", true),

@@ -3,6 +3,7 @@ package com.example.ai
 import com.example.BuildConfig
 import com.example.data.database.FoodEntity
 import com.example.domain.NutritionCalculationEngine
+import com.example.util.ApiKeyUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -15,8 +16,7 @@ import java.util.concurrent.TimeUnit
 
 class GeminiNutritionAIService(
     private val apiKeyProvider: () -> String = { "" },
-    private val modelProvider: () -> String = { "gemini-3.6-flash" },
-    private val localFallbackService: LocalRuleBasedNutritionAIService = LocalRuleBasedNutritionAIService()
+    private val modelProvider: () -> String = { "gemini-3.6-flash" }
 ) : NutritionAIService {
 
     override val providerName: String = "Gemini AI"
@@ -30,7 +30,7 @@ class GeminiNutritionAIService(
         userInput: String,
         inventory: List<FoodEntity>
     ): NutritionAiParseResult = withContext(Dispatchers.IO) {
-        val customKey = apiKeyProvider().trim()
+        val customKey = ApiKeyUtils.normalize(apiKeyProvider())
         val apiKey = if (customKey.isNotBlank()) {
             customKey
         } else {
@@ -41,9 +41,12 @@ class GeminiNutritionAIService(
             }
         }
 
-        // If no API key is provided or offline, use local engine directly
         if (apiKey.isNullOrBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext localFallbackService.parseFoodInput(userInput, inventory)
+            return@withContext NutritionAiParseResult(
+                isSuccess = false,
+                providerUsed = "Gemini",
+                errorMessage = "No Gemini API key configured. Add your Gemini API key in Settings, or switch to Local AI."
+            )
         }
 
         try {
@@ -133,10 +136,11 @@ class GeminiNutritionAIService(
 
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) {
-                // Graceful fallback to local parser if API returns error
-                val fallbackResult = localFallbackService.parseFoodInput(userInput, inventory)
-                return@withContext fallbackResult.copy(
-                    providerUsed = "Local (API error ${response.code})"
+                val errorBody = response.body?.string()?.take(300).orEmpty()
+                return@withContext NutritionAiParseResult(
+                    isSuccess = false,
+                    providerUsed = "Gemini",
+                    errorMessage = "Gemini request failed (HTTP ${response.code}). ${errorBody.ifBlank { "The API key or model may be invalid." }} You can retry or switch to Local AI."
                 )
             }
 
@@ -232,9 +236,11 @@ class GeminiNutritionAIService(
                 summaryText = "Parsed with Gemini AI"
             )
         } catch (e: Exception) {
-            // Automatic fallback to local parser
-            val localResult = localFallbackService.parseFoodInput(userInput, inventory)
-            localResult.copy(providerUsed = "Local (Offline/Fallback)")
+            NutritionAiParseResult(
+                isSuccess = false,
+                providerUsed = "Gemini",
+                errorMessage = "Gemini request failed: ${e.message ?: "Unknown network error"}. You can retry or switch to Local AI."
+            )
         }
     }
 }
